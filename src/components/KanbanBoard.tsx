@@ -54,6 +54,7 @@ export function KanbanBoard({
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [showAddList, setShowAddList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
+  const [overId, setOverId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -72,9 +73,15 @@ export function KanbanBoard({
     }
   };
 
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    setOverId(over ? over.id as string : null);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveCard(null);
+    setOverId(null);
 
     if (!over) return;
 
@@ -86,31 +93,55 @@ export function KanbanBoard({
 
     // Handle moving card to a different list
     if (activeCard.list_id !== overList) {
-      const overCards = cards.filter(c => c.list_id === overList);
-      const newPosition = overCards.length;
+      const overCards = cards.filter(c => c.list_id === overList).sort((a, b) => a.position - b.position);
+      let newPosition = overCards.length; // Default to end
+      
+      // If dropping on a specific card in the target list, calculate position
+      if (over.data.current?.type === 'card') {
+        const overCard = cards.find(c => c.id === over.id);
+        if (overCard) {
+          const targetIndex = overCards.findIndex(c => c.id === overCard.id);
+          newPosition = targetIndex;
+        }
+      }
+      
       onMoveCard(activeCard.id, overList, newPosition);
     } else {
       // Handle reordering within the same list
-      const overCard = cards.find(c => c.id === over.id);
-      if (overCard && activeCard.id !== overCard.id) {
-        const listCards = cards.filter(c => c.list_id === activeCard.list_id).sort((a, b) => a.position - b.position);
-        const oldIndex = listCards.findIndex(c => c.id === activeCard.id);
-        const newIndex = listCards.findIndex(c => c.id === overCard.id);
+      const listCards = cards.filter(c => c.list_id === activeCard.list_id).sort((a, b) => a.position - b.position);
+      const oldIndex = listCards.findIndex(c => c.id === activeCard.id);
+      
+      let newIndex: number;
+      
+      if (over.data.current?.type === 'list') {
+        // Dropped on the list itself (at the end)
+        newIndex = listCards.length - 1;
+      } else {
+        // Dropped on a card
+        const overCard = cards.find(c => c.id === over.id);
+        if (!overCard) return;
         
-        if (oldIndex !== newIndex) {
-          const reorderedCards = arrayMove(listCards, oldIndex, newIndex);
-          
-          // Prepare batch updates for all affected cards
-          const cardUpdates = reorderedCards
-            .map((card, index) => ({ id: card.id, list_id: card.list_id, position: index }))
-            .filter(update => {
-              const originalCard = cards.find(c => c.id === update.id);
-              return originalCard && (originalCard.position !== update.position || originalCard.list_id !== update.list_id);
-            });
-          
-          if (cardUpdates.length > 0) {
-            onUpdateCardPositions(cardUpdates);
-          }
+        newIndex = listCards.findIndex(c => c.id === overCard.id);
+        
+        // If dragging down, we need to adjust the index
+        if (oldIndex < newIndex) {
+          newIndex -= 1;
+        }
+      }
+      
+      if (oldIndex !== newIndex && newIndex >= 0) {
+        const reorderedCards = arrayMove(listCards, oldIndex, newIndex);
+        
+        // Prepare batch updates for all affected cards
+        const cardUpdates = reorderedCards
+          .map((card, index) => ({ id: card.id, list_id: card.list_id, position: index }))
+          .filter(update => {
+            const originalCard = cards.find(c => c.id === update.id);
+            return originalCard && (originalCard.position !== update.position || originalCard.list_id !== update.list_id);
+          });
+        
+        if (cardUpdates.length > 0) {
+          onUpdateCardPositions(cardUpdates);
         }
       }
     }
@@ -135,6 +166,7 @@ export function KanbanBoard({
     <DndContext
       sensors={sensors}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="p-6">

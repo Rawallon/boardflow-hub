@@ -5,6 +5,7 @@ import { KanbanCard } from './KanbanCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, X } from 'lucide-react';
+import { useDndMonitor } from '@dnd-kit/core';
 
 interface List {
   id: string;
@@ -31,12 +32,24 @@ interface KanbanListProps {
 export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanListProps) {
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
+  const [isOver, setIsOver] = useState(false);
 
-  const { setNodeRef } = useDroppable({
+  const { setNodeRef, isOver: isDroppableOver } = useDroppable({
     id: list.id,
     data: {
       type: 'list',
       listId: list.id,
+    },
+  });
+
+  // Monitor drag state for visual feedback
+  useDndMonitor({
+    onDragOver: (event) => {
+      const { over } = event;
+      setIsOver(over?.id === list.id);
+    },
+    onDragEnd: () => {
+      setIsOver(false);
     },
   });
 
@@ -59,7 +72,9 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanLi
 
         <div
           ref={setNodeRef}
-          className="space-y-3 min-h-[200px]"
+          className={`space-y-3 min-h-[200px] transition-colors duration-200 ${
+            isDroppableOver ? 'bg-blue-50 dark:bg-blue-950/20 rounded-lg' : ''
+          }`}
         >
           <SortableContext items={cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
             {cards.map((card) => (

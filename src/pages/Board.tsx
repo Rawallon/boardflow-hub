@@ -163,21 +163,31 @@ export default function Board() {
 
   const moveCard = async (cardId: string, newListId: string, newPosition: number) => {
     try {
-      const { error } = await supabase
-        .from('cards')
-        .update({ list_id: newListId, position: newPosition })
-        .eq('id', cardId);
+      const cardToMove = cards.find(c => c.id === cardId);
+      if (!cardToMove) return;
 
-      if (error) throw error;
+      // Get all cards in the target list, sorted by position
+      const targetListCards = cards
+        .filter(c => c.list_id === newListId && c.id !== cardId)
+        .sort((a, b) => a.position - b.position);
 
-      // Update local state
-      setCards(prevCards => 
-        prevCards.map(card => 
-          card.id === cardId 
-            ? { ...card, list_id: newListId, position: newPosition }
-            : card
-        )
-      );
+      // Create new positions for all cards in the target list
+      const cardUpdates = [];
+      
+      // Add the moved card at the new position
+      cardUpdates.push({ id: cardId, list_id: newListId, position: newPosition });
+      
+      // Update positions for existing cards in the target list
+      targetListCards.forEach((card, index) => {
+        let adjustedPosition = index;
+        if (index >= newPosition) {
+          adjustedPosition = index + 1;
+        }
+        cardUpdates.push({ id: card.id, list_id: card.list_id, position: adjustedPosition });
+      });
+
+      // Update all cards in batch
+      await updateCardPositions(cardUpdates);
     } catch (error: any) {
       toast({
         title: 'Error',
