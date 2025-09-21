@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { KanbanCard } from './KanbanCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, X, Edit2, Trash2, MoreHorizontal, GripVertical } from 'lucide-react';
+import { Plus, X, Edit2, Trash2, MoreHorizontal, GripVertical, Copy } from 'lucide-react';
 import { useDndMonitor } from '@dnd-kit/core';
 import {
   DropdownMenu,
@@ -13,6 +13,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface List {
   id: string;
@@ -37,15 +43,18 @@ interface KanbanListProps {
   onDeleteCard: (cardId: string) => Promise<void>;
   onUpdateList: (listId: string, updates: Partial<List>) => Promise<void>;
   onDeleteList: (listId: string) => Promise<void>;
+  onDuplicateList: (listId: string, newTitle: string) => Promise<void>;
 }
 
-export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCard, onUpdateList, onDeleteList }: KanbanListProps) {
+export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCard, onUpdateList, onDeleteList, onDuplicateList }: KanbanListProps) {
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [isOver, setIsOver] = useState(false);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(list.title);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateTitle, setDuplicateTitle] = useState(`${list.title} (Copy)`);
 
   const {
     attributes,
@@ -135,6 +144,23 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
     }
   };
 
+  const handleDuplicateList = () => {
+    setDuplicateTitle(`${list.title} (Copy)`);
+    setShowDuplicateModal(true);
+  };
+
+  const handleConfirmDuplicate = async () => {
+    if (duplicateTitle.trim()) {
+      await onDuplicateList(list.id, duplicateTitle.trim());
+      setShowDuplicateModal(false);
+    }
+  };
+
+  const handleCancelDuplicate = () => {
+    setShowDuplicateModal(false);
+    setDuplicateTitle(`${list.title} (Copy)`);
+  };
+
   return (
     <div 
       ref={setRefs}
@@ -183,6 +209,10 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
                 <DropdownMenuItem onClick={() => setIsEditingTitle(true)}>
                   <Edit2 className="h-4 w-4 mr-2" />
                   Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDuplicateList}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Duplicate
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleDeleteList} className="text-destructive">
                   <Trash2 className="h-4 w-4 mr-2" />
@@ -260,6 +290,54 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
           )}
         </div>
       </div>
+
+      {/* Duplicate List Modal */}
+      <Dialog open={showDuplicateModal} onOpenChange={setShowDuplicateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicate List</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="duplicate-title" className="block text-sm font-medium mb-2">
+                New list name
+              </label>
+              <Input
+                id="duplicate-title"
+                value={duplicateTitle}
+                onChange={(e) => setDuplicateTitle(e.target.value)}
+                placeholder="Enter list name..."
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleConfirmDuplicate();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    handleCancelDuplicate();
+                  }
+                }}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancelDuplicate}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmDuplicate}
+                disabled={!duplicateTitle.trim()}
+              >
+                Duplicate
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -40,6 +40,7 @@ interface KanbanBoardProps {
   onDeleteCard: (cardId: string) => Promise<void>;
   onUpdateList: (listId: string, updates: Partial<List>) => Promise<void>;
   onDeleteList: (listId: string) => Promise<void>;
+  onDuplicateList: (listId: string, newTitle: string) => Promise<void>;
   onUpdateBoard: (updates: Partial<{ id: string; title: string; description: string | null }>) => Promise<void>;
   onDeleteBoard: () => Promise<void>;
   onMoveCard: (cardId: string, newListId: string, newPosition: number) => Promise<void>;
@@ -58,6 +59,7 @@ export function KanbanBoard({
   onDeleteCard,
   onUpdateList,
   onDeleteList,
+  onDuplicateList,
   onUpdateBoard,
   onDeleteBoard,
   onMoveCard,
@@ -259,6 +261,7 @@ export function KanbanBoard({
                 onDeleteCard={onDeleteCard}
                 onUpdateList={onUpdateList}
                 onDeleteList={onDeleteList}
+                onDuplicateList={onDuplicateList}
               />
             ))}
           </SortableContext>
@@ -320,6 +323,7 @@ export function KanbanBoard({
               onDeleteCard={onDeleteCard}
               onUpdateList={onUpdateList}
               onDeleteList={onDeleteList}
+              onDuplicateList={onDuplicateList}
             />
           </div>
         )}

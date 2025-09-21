@@ -820,6 +820,60 @@ export default function Board() {
     }
   };
 
+  const duplicateList = async (listId: string, newTitle: string) => {
+    try {
+      const originalList = lists.find(l => l.id === listId);
+      if (!originalList) {
+        throw new Error('List not found');
+      }
+
+      // Get all cards in the original list
+      const originalCards = cards.filter(c => c.list_id === listId);
+
+      // Create the new list with the next position
+      const newPosition = Math.max(...lists.map(l => l.position), -1) + 1;
+      
+      const { data: newList, error: listError } = await supabase
+        .from('lists')
+        .insert([{ 
+          title: newTitle, 
+          board_id: boardId, 
+          position: newPosition 
+        }])
+        .select()
+        .single();
+
+      if (listError) throw listError;
+
+      // Create all the cards for the new list
+      if (originalCards.length > 0) {
+        const newCards = originalCards.map(card => ({
+          title: card.title,
+          description: card.description,
+          list_id: newList.id,
+          position: card.position
+        }));
+
+        const { error: cardsError } = await supabase
+          .from('cards')
+          .insert(newCards);
+
+        if (cardsError) throw cardsError;
+      }
+
+      toast({
+        title: 'Success',
+        description: `List "${newTitle}" duplicated successfully with ${originalCards.length} cards!`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -917,6 +971,7 @@ export default function Board() {
           onDeleteCard={deleteCard}
           onUpdateList={updateList}
           onDeleteList={deleteList}
+          onDuplicateList={duplicateList}
           onUpdateBoard={updateBoard}
           onDeleteBoard={deleteBoard}
           onMoveCard={moveCard}
