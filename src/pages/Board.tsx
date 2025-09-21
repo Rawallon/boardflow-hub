@@ -733,6 +733,93 @@ export default function Board() {
     }
   };
 
+  const moveList = async (listId: string, newPosition: number) => {
+    try {
+      console.log('Moving list:', { listId, newPosition });
+      
+      // Perform optimistic update first
+      const listUpdates = optimisticMoveList(listId, newPosition);
+      
+      if (!listUpdates || listUpdates.length === 0) {
+        console.log('No list updates needed');
+        return;
+      }
+
+      // Then update the database
+      await updateListPositions(listUpdates);
+    } catch (error: any) {
+      console.error('Error in moveList, reverting optimistic update:', error);
+      
+      // Revert the optimistic update on error
+      fetchBoardData();
+      
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const optimisticMoveList = (listId: string, newPosition: number) => {
+    console.log('Performing optimistic list move:', { listId, newPosition });
+    const listToMove = lists.find(l => l.id === listId);
+    if (!listToMove) return;
+
+    const sortedLists = [...lists].sort((a, b) => a.position - b.position);
+    const oldIndex = sortedLists.findIndex(l => l.id === listId);
+    
+    if (oldIndex === -1) return;
+
+    const reorderedLists = arrayMove(sortedLists, oldIndex, newPosition);
+    
+    const listUpdates = reorderedLists
+      .map((list, index) => ({ id: list.id, position: index }))
+      .filter(update => {
+        const originalList = lists.find(l => l.id === update.id);
+        return originalList && originalList.position !== update.position;
+      });
+
+    // Update local state immediately
+    setLists(prevLists => {
+      const updatedLists = prevLists.map(list => {
+        const update = listUpdates.find(u => u.id === list.id);
+        return update ? { ...list, position: update.position } : list;
+      });
+      return updatedLists.sort((a, b) => a.position - b.position);
+    });
+
+    return listUpdates;
+  };
+
+  const updateListPositions = async (listUpdates: { id: string; position: number }[]) => {
+    try {
+      console.log('Updating list positions in database:', listUpdates);
+      
+      // Update all lists in a single transaction
+      const updates = listUpdates.map(update => 
+        supabase
+          .from('lists')
+          .update({ position: update.position })
+          .eq('id', update.id)
+      );
+
+      const results = await Promise.all(updates);
+      
+      // Check for any errors
+      const errors = results.filter(result => result.error);
+      if (errors.length > 0) {
+        console.error('Database update errors:', errors);
+        throw errors[0].error;
+      }
+
+      console.log('Database updates successful - real-time subscriptions will handle state updates');
+    } catch (error: any) {
+      console.error('Error updating list positions:', error);
+      throw error; // Re-throw to let the caller handle it
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -835,6 +922,8 @@ export default function Board() {
           onMoveCard={moveCard}
           onUpdateCardPositions={updateCardPositions}
           onOptimisticMoveCard={optimisticMoveCard}
+          onMoveList={moveList}
+          onOptimisticMoveList={optimisticMoveList}
         />
       </main>
 

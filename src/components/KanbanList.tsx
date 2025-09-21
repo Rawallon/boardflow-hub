@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { KanbanCard } from './KanbanCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, X, Edit2, Trash2, MoreHorizontal } from 'lucide-react';
+import { Plus, X, Edit2, Trash2, MoreHorizontal, GripVertical } from 'lucide-react';
 import { useDndMonitor } from '@dnd-kit/core';
 import {
   DropdownMenu,
@@ -46,6 +47,21 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(list.title);
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setSortableNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: list.id,
+    data: {
+      type: 'list',
+      listId: list.id,
+    },
+  });
+
   const { setNodeRef, isOver: isDroppableOver } = useDroppable({
     id: list.id,
     data: {
@@ -53,6 +69,17 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
       listId: list.id,
     },
   });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  // Combine both refs
+  const setRefs = (node: HTMLElement | null) => {
+    setSortableNodeRef(node);
+    setNodeRef(node);
+  };
 
   // Monitor drag state for visual feedback
   useDndMonitor({
@@ -109,28 +136,41 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
   };
 
   return (
-    <div className="flex-shrink-0 w-80">
+    <div 
+      ref={setRefs}
+      style={style}
+      className={`flex-shrink-0 w-80 ${isDragging ? 'opacity-50' : ''}`}
+    >
       <div className="bg-muted/30 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
-          {isEditingTitle ? (
-            <div className="flex-1 mr-2">
-              <Input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onBlur={handleUpdateTitle}
-                className="h-6 text-sm font-semibold"
-                autoFocus
-              />
-            </div>
-          ) : (
-            <h3 
-              className="font-semibold text-foreground cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded flex-1"
-              onClick={() => setIsEditingTitle(true)}
+          <div className="flex items-center flex-1">
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing mr-2 p-1 hover:bg-muted/50 rounded"
             >
-              {list.title}
-            </h3>
-          )}
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
+            {isEditingTitle ? (
+              <div className="flex-1 mr-2">
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onBlur={handleUpdateTitle}
+                  className="h-6 text-sm font-semibold"
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <h3 
+                className="font-semibold text-foreground cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded flex-1"
+                onClick={() => setIsEditingTitle(true)}
+              >
+                {list.title}
+              </h3>
+            )}
+          </div>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-muted-foreground">{cards.length}</span>
             <DropdownMenu>

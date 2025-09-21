@@ -45,6 +45,8 @@ interface KanbanBoardProps {
   onMoveCard: (cardId: string, newListId: string, newPosition: number) => Promise<void>;
   onUpdateCardPositions: (cardUpdates: { id: string; list_id: string; position: number }[]) => Promise<void>;
   onOptimisticMoveCard: (cardId: string, newListId: string, newPosition: number) => { id: string; list_id: string; position: number }[] | undefined;
+  onMoveList: (listId: string, newPosition: number) => Promise<void>;
+  onOptimisticMoveList: (listId: string, newPosition: number) => { id: string; position: number }[] | undefined;
 }
 
 export function KanbanBoard({
@@ -61,9 +63,12 @@ export function KanbanBoard({
   onMoveCard,
   onUpdateCardPositions,
   onOptimisticMoveCard,
+  onMoveList,
+  onOptimisticMoveList,
 }: KanbanBoardProps) {
   // Component for managing kanban board with drag and drop functionality
   const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [activeList, setActiveList] = useState<List | null>(null);
   const [showAddList, setShowAddList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [overId, setOverId] = useState<string | null>(null);
@@ -82,6 +87,9 @@ export function KanbanBoard({
     if (active.data.current?.type === 'card') {
       const card = cards.find(c => c.id === active.id);
       setActiveCard(card || null);
+    } else if (active.data.current?.type === 'list') {
+      const list = lists.find(l => l.id === active.id);
+      setActiveList(list || null);
     }
   };
 
@@ -94,6 +102,7 @@ export function KanbanBoard({
     const { active, over } = event;
     console.log('Drag end event:', { active: active.id, over: over?.id, overData: over?.data.current });
     setActiveCard(null);
+    setActiveList(null);
     setOverId(null);
 
     if (!over) {
@@ -101,6 +110,35 @@ export function KanbanBoard({
       return;
     }
 
+    // Handle list reordering
+    if (active.data.current?.type === 'list') {
+      const activeList = lists.find(l => l.id === active.id);
+      if (!activeList) {
+        console.log('Active list not found');
+        return;
+      }
+
+      const overList = lists.find(l => l.id === over.id);
+      if (!overList) {
+        console.log('Over list not found');
+        return;
+      }
+
+      const oldIndex = lists.findIndex(l => l.id === activeList.id);
+      const newIndex = lists.findIndex(l => l.id === overList.id);
+
+      if (oldIndex !== newIndex) {
+        console.log('Reordering lists:', { oldIndex, newIndex });
+        // Perform optimistic update immediately for instant UI feedback
+        onOptimisticMoveList(activeList.id, newIndex);
+        
+        // Then update the database
+        onMoveList(activeList.id, newIndex);
+      }
+      return;
+    }
+
+    // Handle card reordering (existing logic)
     const activeCard = cards.find(c => c.id === active.id);
     if (!activeCard) {
       console.log('Active card not found');
@@ -269,7 +307,20 @@ export function KanbanBoard({
       <DragOverlay>
         {activeCard && (
           <div className="transform rotate-3 scale-105 shadow-2xl">
-            <KanbanCard card={activeCard} onUpdateCard={onUpdateCard} isDragging />
+            <KanbanCard card={activeCard} onUpdateCard={onUpdateCard} onDeleteCard={onDeleteCard} isDragging />
+          </div>
+        )}
+        {activeList && (
+          <div className="transform rotate-3 scale-105 shadow-2xl">
+            <KanbanList
+              list={activeList}
+              cards={getCardsByListId(activeList.id)}
+              onCreateCard={onCreateCard}
+              onUpdateCard={onUpdateCard}
+              onDeleteCard={onDeleteCard}
+              onUpdateList={onUpdateList}
+              onDeleteList={onDeleteList}
+            />
           </div>
         )}
       </DragOverlay>
