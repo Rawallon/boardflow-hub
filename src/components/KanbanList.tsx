@@ -33,6 +33,7 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanLi
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [isOver, setIsOver] = useState(false);
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
 
   const { setNodeRef, isOver: isDroppableOver } = useDroppable({
     id: list.id,
@@ -47,9 +48,17 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanLi
     onDragOver: (event) => {
       const { over } = event;
       setIsOver(over?.id === list.id);
+      
+      // Track which card is being hovered over
+      if (over?.data.current?.type === 'card' && over.data.current?.listId === list.id) {
+        setDragOverCardId(over.id as string);
+      } else {
+        setDragOverCardId(null);
+      }
     },
     onDragEnd: () => {
       setIsOver(false);
+      setDragOverCardId(null);
     },
   });
 
@@ -77,13 +86,23 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanLi
           }`}
         >
           <SortableContext items={cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
-            {cards.map((card) => (
-              <KanbanCard
-                key={card.id}
-                card={card}
-                onUpdateCard={onUpdateCard}
-              />
+            {cards.map((card, index) => (
+              <div key={card.id} className="relative">
+                {/* Drop indicator line above the card */}
+                {dragOverCardId === card.id && (
+                  <div className="absolute -top-1.5 left-0 right-0 h-0.5 bg-blue-500 rounded-full z-10 shadow-lg" />
+                )}
+                <KanbanCard
+                  card={card}
+                  onUpdateCard={onUpdateCard}
+                  isDragOver={dragOverCardId === card.id}
+                />
+              </div>
             ))}
+            {/* Drop indicator at the end of the list */}
+            {isDroppableOver && dragOverCardId === null && (
+              <div className="h-0.5 bg-blue-500 rounded-full shadow-lg" />
+            )}
           </SortableContext>
         </div>
 

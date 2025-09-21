@@ -226,7 +226,9 @@ export function KanbanBoard({
 
       <DragOverlay>
         {activeCard && (
-          <KanbanCard card={activeCard} onUpdateCard={onUpdateCard} isDragging />
+          <div className="transform rotate-3 scale-105 shadow-2xl">
+            <KanbanCard card={activeCard} onUpdateCard={onUpdateCard} isDragging />
+          </div>
         )}
       </DragOverlay>
     </DndContext>

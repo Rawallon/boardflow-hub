@@ -16,9 +16,10 @@ interface KanbanCardProps {
   card: CardProps;
   onUpdateCard: (cardId: string, updates: Partial<CardProps>) => Promise<void>;
   isDragging?: boolean;
+  isDragOver?: boolean;
 }
 
-export function KanbanCard({ card, onUpdateCard, isDragging = false }: KanbanCardProps) {
+export function KanbanCard({ card, onUpdateCard, isDragging = false, isDragOver = false }: KanbanCardProps) {
   const [showModal, setShowModal] = useState(false);
 
   const {
@@ -51,8 +52,10 @@ export function KanbanCard({ card, onUpdateCard, isDragging = false }: KanbanCar
         style={style}
         {...attributes}
         {...listeners}
-        className={`cursor-pointer hover:shadow-md transition-shadow ${
+        className={`cursor-pointer hover:shadow-md transition-all duration-200 ${
           isCurrentlyDragging ? 'opacity-50' : ''
+        } ${
+          isDragOver ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg scale-105' : ''
         }`}
         onClick={() => setShowModal(true)}
       >
