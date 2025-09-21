@@ -38,6 +38,7 @@ interface KanbanBoardProps {
   onCreateCard: (listId: string, title: string) => Promise<void>;
   onUpdateCard: (cardId: string, updates: Partial<Card>) => Promise<void>;
   onMoveCard: (cardId: string, newListId: string, newPosition: number) => Promise<void>;
+  onUpdateCardPositions: (cardUpdates: { id: string; list_id: string; position: number }[]) => Promise<void>;
 }
 
 export function KanbanBoard({
@@ -47,7 +48,9 @@ export function KanbanBoard({
   onCreateCard,
   onUpdateCard,
   onMoveCard,
+  onUpdateCardPositions,
 }: KanbanBoardProps) {
+  // Component for managing kanban board with drag and drop functionality
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [showAddList, setShowAddList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -81,10 +84,35 @@ export function KanbanBoard({
     const overList = over.data.current?.type === 'list' ? over.id as string : over.data.current?.listId;
     if (!overList) return;
 
+    // Handle moving card to a different list
     if (activeCard.list_id !== overList) {
       const overCards = cards.filter(c => c.list_id === overList);
       const newPosition = overCards.length;
       onMoveCard(activeCard.id, overList, newPosition);
+    } else {
+      // Handle reordering within the same list
+      const overCard = cards.find(c => c.id === over.id);
+      if (overCard && activeCard.id !== overCard.id) {
+        const listCards = cards.filter(c => c.list_id === activeCard.list_id).sort((a, b) => a.position - b.position);
+        const oldIndex = listCards.findIndex(c => c.id === activeCard.id);
+        const newIndex = listCards.findIndex(c => c.id === overCard.id);
+        
+        if (oldIndex !== newIndex) {
+          const reorderedCards = arrayMove(listCards, oldIndex, newIndex);
+          
+          // Prepare batch updates for all affected cards
+          const cardUpdates = reorderedCards
+            .map((card, index) => ({ id: card.id, list_id: card.list_id, position: index }))
+            .filter(update => {
+              const originalCard = cards.find(c => c.id === update.id);
+              return originalCard && (originalCard.position !== update.position || originalCard.list_id !== update.list_id);
+            });
+          
+          if (cardUpdates.length > 0) {
+            onUpdateCardPositions(cardUpdates);
+          }
+        }
+      }
     }
   };
 

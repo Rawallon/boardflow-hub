@@ -187,6 +187,40 @@ export default function Board() {
     }
   };
 
+  const updateCardPositions = async (cardUpdates: { id: string; list_id: string; position: number }[]) => {
+    try {
+      // Update all cards in a single transaction
+      const updates = cardUpdates.map(update => 
+        supabase
+          .from('cards')
+          .update({ list_id: update.list_id, position: update.position })
+          .eq('id', update.id)
+      );
+
+      const results = await Promise.all(updates);
+      
+      // Check for any errors
+      const errors = results.filter(result => result.error);
+      if (errors.length > 0) {
+        throw errors[0].error;
+      }
+
+      // Update local state
+      setCards(prevCards => 
+        prevCards.map(card => {
+          const update = cardUpdates.find(u => u.id === card.id);
+          return update ? { ...card, list_id: update.list_id, position: update.position } : card;
+        })
+      );
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -246,6 +280,7 @@ export default function Board() {
           onCreateCard={createCard}
           onUpdateCard={updateCard}
           onMoveCard={moveCard}
+          onUpdateCardPositions={updateCardPositions}
         />
       </main>
     </div>
