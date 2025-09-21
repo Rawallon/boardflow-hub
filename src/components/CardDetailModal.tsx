@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -33,11 +33,25 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const mdEditorRef = useRef<any>(null);
 
   useEffect(() => {
     setTitle(card.title);
     setDescription(card.description || '');
   }, [card]);
+
+  // Focus the MDEditor when entering edit mode
+  useEffect(() => {
+    if (isEditingDescription && mdEditorRef.current) {
+      // Small delay to ensure the editor is rendered
+      setTimeout(() => {
+        const textarea = mdEditorRef.current?.querySelector('textarea');
+        if (textarea) {
+          textarea.focus();
+        }
+      }, 100);
+    }
+  }, [isEditingDescription]);
 
   const handleSaveTitle = async () => {
     if (!title.trim()) {
@@ -199,7 +213,7 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
 
             <div className="flex-1 overflow-hidden">
               {isEditingDescription ? (
-                <div className="h-full border rounded-md overflow-hidden">
+                <div className="h-full border rounded-md overflow-hidden" ref={mdEditorRef}>
                   <MDEditor
                     value={description}
                     onChange={handleDescriptionChange}
