@@ -1,11 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Settings, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { arrayMove } from '@dnd-kit/sortable';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Board {
   id: string;
@@ -35,6 +49,11 @@ export default function Board() {
   const [lists, setLists] = useState<List[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showBoardEdit, setShowBoardEdit] = useState(false);
+  const [editBoardTitle, setEditBoardTitle] = useState('');
+  const [editBoardDescription, setEditBoardDescription] = useState('');
+  const [isEditingBoardTitle, setIsEditingBoardTitle] = useState(false);
+  const [inlineBoardTitle, setInlineBoardTitle] = useState('');
 
   useEffect(() => {
     if (boardId) {
@@ -86,6 +105,140 @@ export default function Board() {
     }
   };
 
+  const updateBoard = async (updates: Partial<Board>) => {
+    if (!boardId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('boards')
+        .update(updates)
+        .eq('id', boardId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setBoard(data);
+      toast({
+        title: 'Success',
+        description: 'Board updated successfully!',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteBoard = async () => {
+    if (!boardId) return;
+
+    if (confirm(`Are you sure you want to delete "${board?.title}"? This will delete all lists and cards in this board.`)) {
+      try {
+        // First delete all cards
+        const { error: cardsError } = await supabase
+          .from('cards')
+          .delete()
+          .in('list_id', lists.map(list => list.id));
+
+        if (cardsError) throw cardsError;
+
+        // Then delete all lists
+        const { error: listsError } = await supabase
+          .from('lists')
+          .delete()
+          .eq('board_id', boardId);
+
+        if (listsError) throw listsError;
+
+        // Finally delete the board
+        const { error: boardError } = await supabase
+          .from('boards')
+          .delete()
+          .eq('id', boardId);
+
+        if (boardError) throw boardError;
+
+        toast({
+          title: 'Success',
+          description: 'Board deleted successfully!',
+        });
+
+        // Redirect to dashboard
+        window.location.href = '/';
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const handleEditBoard = () => {
+    if (board) {
+      setEditBoardTitle(board.title);
+      setEditBoardDescription(board.description || '');
+      setShowBoardEdit(true);
+    }
+  };
+
+  const handleSaveBoard = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    
+    if (!editBoardTitle.trim()) {
+      setEditBoardTitle(board?.title || '');
+      setShowBoardEdit(false);
+      return;
+    }
+
+    await updateBoard({
+      title: editBoardTitle.trim(),
+      description: editBoardDescription.trim() || null,
+    });
+    setShowBoardEdit(false);
+  };
+
+  const handleBoardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      handleSaveBoard();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleSaveBoard();
+    }
+  };
+
+  const handleInlineBoardTitleEdit = () => {
+    if (board) {
+      setInlineBoardTitle(board.title);
+      setIsEditingBoardTitle(true);
+    }
+  };
+
+  const handleSaveInlineBoardTitle = async () => {
+    if (!inlineBoardTitle.trim()) {
+      setInlineBoardTitle(board?.title || '');
+      setIsEditingBoardTitle(false);
+      return;
+    }
+
+    if (inlineBoardTitle.trim() !== board?.title) {
+      await updateBoard({ title: inlineBoardTitle.trim() });
+    }
+    setIsEditingBoardTitle(false);
+  };
+
+  const handleInlineBoardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault();
+      handleSaveInlineBoardTitle();
+    }
+  };
+
   const createList = async (title: string) => {
     if (!boardId) return;
 
@@ -104,6 +257,66 @@ export default function Board() {
       toast({
         title: 'Success',
         description: 'List created successfully!',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const updateList = async (listId: string, updates: Partial<List>) => {
+    try {
+      const { data, error } = await supabase
+        .from('lists')
+        .update(updates)
+        .eq('id', listId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setLists(lists.map(list => list.id === listId ? data : list));
+      toast({
+        title: 'Success',
+        description: 'List updated successfully!',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteList = async (listId: string) => {
+    try {
+      // First delete all cards in the list
+      const { error: cardsError } = await supabase
+        .from('cards')
+        .delete()
+        .eq('list_id', listId);
+
+      if (cardsError) throw cardsError;
+
+      // Then delete the list
+      const { error: listError } = await supabase
+        .from('lists')
+        .delete()
+        .eq('id', listId);
+
+      if (listError) throw listError;
+
+      // Update local state
+      setLists(lists.filter(list => list.id !== listId));
+      setCards(cards.filter(card => card.list_id !== listId));
+      
+      toast({
+        title: 'Success',
+        description: 'List deleted successfully!',
       });
     } catch (error: any) {
       toast({
@@ -153,6 +366,29 @@ export default function Board() {
       if (error) throw error;
 
       setCards(cards.map(card => card.id === cardId ? data : card));
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteCard = async (cardId: string) => {
+    try {
+      const { error } = await supabase
+        .from('cards')
+        .delete()
+        .eq('id', cardId);
+
+      if (error) throw error;
+
+      setCards(cards.filter(card => card.id !== cardId));
+      toast({
+        title: 'Success',
+        description: 'Card deleted successfully!',
+      });
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -322,12 +558,46 @@ export default function Board() {
                 Back
               </Button>
             </Link>
-            <div>
-              <h1 className="text-xl font-bold">{board.title}</h1>
+            <div className="flex-1">
+              {isEditingBoardTitle ? (
+                <Input
+                  value={inlineBoardTitle}
+                  onChange={(e) => setInlineBoardTitle(e.target.value)}
+                  onKeyDown={handleInlineBoardKeyDown}
+                  onBlur={handleSaveInlineBoardTitle}
+                  className="text-xl font-bold h-8 bg-transparent border-none p-0 focus:ring-0 focus:border-b-2 focus:border-primary"
+                  autoFocus
+                />
+              ) : (
+                <h1 
+                  className="text-xl font-bold cursor-pointer hover:bg-muted/50 px-2 py-1 rounded"
+                  onClick={handleInlineBoardTitleEdit}
+                >
+                  {board.title}
+                </h1>
+              )}
               {board.description && (
                 <p className="text-sm text-muted-foreground">{board.description}</p>
               )}
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleEditBoard}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Edit Board
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={deleteBoard} className="text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Board
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -339,11 +609,70 @@ export default function Board() {
           onCreateList={createList}
           onCreateCard={createCard}
           onUpdateCard={updateCard}
+          onDeleteCard={deleteCard}
+          onUpdateList={updateList}
+          onDeleteList={deleteList}
+          onUpdateBoard={updateBoard}
+          onDeleteBoard={deleteBoard}
           onMoveCard={moveCard}
           onUpdateCardPositions={updateCardPositions}
           onOptimisticMoveCard={optimisticMoveCard}
         />
       </main>
+
+      {/* Board Edit Dialog */}
+      <Dialog open={showBoardEdit} onOpenChange={setShowBoardEdit}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Board</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveBoard} onKeyDown={handleBoardKeyDown} className="space-y-4">
+            <div>
+              <label htmlFor="board-title" className="block text-sm font-medium mb-2">
+                Board Title
+              </label>
+              <Input
+                id="board-title"
+                value={editBoardTitle}
+                onChange={(e) => setEditBoardTitle(e.target.value)}
+                onBlur={() => {
+                  // Only save on blur if the dialog is still open
+                  if (showBoardEdit) {
+                    handleSaveBoard();
+                  }
+                }}
+                placeholder="Enter board title..."
+                required
+                autoFocus
+              />
+            </div>
+            <div>
+              <label htmlFor="board-description" className="block text-sm font-medium mb-2">
+                Description (optional)
+              </label>
+              <Textarea
+                id="board-description"
+                value={editBoardDescription}
+                onChange={(e) => setEditBoardDescription(e.target.value)}
+                placeholder="Enter board description..."
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSaveBoard}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

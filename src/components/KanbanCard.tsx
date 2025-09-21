@@ -15,11 +15,12 @@ interface CardProps {
 interface KanbanCardProps {
   card: CardProps;
   onUpdateCard: (cardId: string, updates: Partial<CardProps>) => Promise<void>;
+  onDeleteCard: (cardId: string) => Promise<void>;
   isDragging?: boolean;
   isDragOver?: boolean;
 }
 
-export function KanbanCard({ card, onUpdateCard, isDragging = false, isDragOver = false }: KanbanCardProps) {
+export function KanbanCard({ card, onUpdateCard, onDeleteCard, isDragging = false, isDragOver = false }: KanbanCardProps) {
   const [showModal, setShowModal] = useState(false);
 
   const {
@@ -75,6 +76,7 @@ export function KanbanCard({ card, onUpdateCard, isDragging = false, isDragOver 
         open={showModal}
         onOpenChange={setShowModal}
         onUpdateCard={onUpdateCard}
+        onDeleteCard={onDeleteCard}
       />
     </>
   );

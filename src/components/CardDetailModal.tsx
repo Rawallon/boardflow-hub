@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Edit3, Eye, Save, X } from 'lucide-react';
+import { Edit3, Eye, Save, X, Trash2 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 
 interface Card {
@@ -23,9 +23,10 @@ interface CardDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdateCard: (cardId: string, updates: Partial<Card>) => Promise<void>;
+  onDeleteCard: (cardId: string) => Promise<void>;
 }
 
-export function CardDetailModal({ card, open, onOpenChange, onUpdateCard }: CardDetailModalProps) {
+export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDeleteCard }: CardDetailModalProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || '');
@@ -38,6 +39,12 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard }: Card
   }, [card]);
 
   const handleSaveTitle = async () => {
+    if (!title.trim()) {
+      setTitle(card.title); // Reset to original if empty
+      setEditingTitle(false);
+      return;
+    }
+
     if (title.trim() !== card.title) {
       setSaving(true);
       await onUpdateCard(card.id, { title: title.trim() });
@@ -54,13 +61,20 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard }: Card
     }
   };
 
+  const handleDeleteCard = async () => {
+    if (confirm(`Are you sure you want to delete "${card.title}"?`)) {
+      await onDeleteCard(card.id);
+      onOpenChange(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSaveTitle();
     } else if (e.key === 'Escape') {
-      setTitle(card.title);
-      setEditingTitle(false);
+      e.preventDefault();
+      handleSaveTitle();
     }
   };
 
@@ -68,42 +82,44 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard }: Card
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader className="flex-shrink-0">
-          <div className="flex items-center space-x-2">
-            {editingTitle ? (
-              <div className="flex-1 flex items-center space-x-2">
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="text-lg font-semibold"
-                  autoFocus
-                />
-                <Button
-                  size="sm"
-                  onClick={handleSaveTitle}
-                  disabled={saving}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 flex-1">
+              {editingTitle ? (
+                <div className="flex-1 flex items-center space-x-2">
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={handleSaveTitle}
+                    className="text-lg font-semibold"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSaveTitle}
+                    disabled={saving}
+                  >
+                    <Save className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <h2
+                  className="text-lg font-semibold cursor-pointer hover:bg-muted px-2 py-1 rounded flex-1"
+                  onClick={() => setEditingTitle(true)}
                 >
-                  <Save className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setTitle(card.title);
-                    setEditingTitle(false);
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <h2
-                className="text-lg font-semibold cursor-pointer hover:bg-muted px-2 py-1 rounded flex-1"
-                onClick={() => setEditingTitle(true)}
-              >
-                {card.title}
-              </h2>
-            )}
+                  {card.title}
+                </h2>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleDeleteCard}
+              className="ml-4"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
           </div>
         </DialogHeader>
 

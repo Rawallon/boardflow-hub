@@ -4,8 +4,14 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { KanbanCard } from './KanbanCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Edit2, Trash2, MoreHorizontal } from 'lucide-react';
 import { useDndMonitor } from '@dnd-kit/core';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface List {
   id: string;
@@ -27,13 +33,18 @@ interface KanbanListProps {
   cards: Card[];
   onCreateCard: (listId: string, title: string) => Promise<void>;
   onUpdateCard: (cardId: string, updates: Partial<Card>) => Promise<void>;
+  onDeleteCard: (cardId: string) => Promise<void>;
+  onUpdateList: (listId: string, updates: Partial<List>) => Promise<void>;
+  onDeleteList: (listId: string) => Promise<void>;
 }
 
-export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanListProps) {
+export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCard, onUpdateList, onDeleteList }: KanbanListProps) {
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [isOver, setIsOver] = useState(false);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState(list.title);
 
   const { setNodeRef, isOver: isDroppableOver } = useDroppable({
     id: list.id,
@@ -71,12 +82,75 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanLi
     setShowAddCard(false);
   };
 
+  const handleUpdateTitle = async () => {
+    if (!editTitle.trim()) {
+      setEditTitle(list.title); // Reset to original if empty
+      setIsEditingTitle(false);
+      return;
+    }
+
+    if (editTitle.trim() !== list.title) {
+      await onUpdateList(list.id, { title: editTitle.trim() });
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault();
+      handleUpdateTitle();
+    }
+  };
+
+  const handleDeleteList = async () => {
+    if (confirm(`Are you sure you want to delete "${list.title}"? This will also delete all cards in this list.`)) {
+      await onDeleteList(list.id);
+    }
+  };
+
   return (
     <div className="flex-shrink-0 w-80">
       <div className="bg-muted/30 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-foreground">{list.title}</h3>
-          <span className="text-sm text-muted-foreground">{cards.length}</span>
+          {isEditingTitle ? (
+            <div className="flex-1 mr-2">
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleUpdateTitle}
+                className="h-6 text-sm font-semibold"
+                autoFocus
+              />
+            </div>
+          ) : (
+            <h3 
+              className="font-semibold text-foreground cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded flex-1"
+              onClick={() => setIsEditingTitle(true)}
+            >
+              {list.title}
+            </h3>
+          )}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-muted-foreground">{cards.length}</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <MoreHorizontal className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setIsEditingTitle(true)}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDeleteList} className="text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <div
@@ -95,6 +169,7 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard }: KanbanLi
                 <KanbanCard
                   card={card}
                   onUpdateCard={onUpdateCard}
+                  onDeleteCard={onDeleteCard}
                   isDragOver={dragOverCardId === card.id}
                 />
               </div>

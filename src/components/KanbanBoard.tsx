@@ -37,6 +37,11 @@ interface KanbanBoardProps {
   onCreateList: (title: string) => Promise<void>;
   onCreateCard: (listId: string, title: string) => Promise<void>;
   onUpdateCard: (cardId: string, updates: Partial<Card>) => Promise<void>;
+  onDeleteCard: (cardId: string) => Promise<void>;
+  onUpdateList: (listId: string, updates: Partial<List>) => Promise<void>;
+  onDeleteList: (listId: string) => Promise<void>;
+  onUpdateBoard: (updates: Partial<{ id: string; title: string; description: string | null }>) => Promise<void>;
+  onDeleteBoard: () => Promise<void>;
   onMoveCard: (cardId: string, newListId: string, newPosition: number) => Promise<void>;
   onUpdateCardPositions: (cardUpdates: { id: string; list_id: string; position: number }[]) => Promise<void>;
   onOptimisticMoveCard: (cardId: string, newListId: string, newPosition: number) => { id: string; list_id: string; position: number }[] | undefined;
@@ -48,6 +53,11 @@ export function KanbanBoard({
   onCreateList,
   onCreateCard,
   onUpdateCard,
+  onDeleteCard,
+  onUpdateList,
+  onDeleteList,
+  onUpdateBoard,
+  onDeleteBoard,
   onMoveCard,
   onUpdateCardPositions,
   onOptimisticMoveCard,
@@ -208,6 +218,9 @@ export function KanbanBoard({
                 cards={getCardsByListId(list.id)}
                 onCreateCard={onCreateCard}
                 onUpdateCard={onUpdateCard}
+                onDeleteCard={onDeleteCard}
+                onUpdateList={onUpdateList}
+                onDeleteList={onDeleteList}
               />
             ))}
           </SortableContext>
