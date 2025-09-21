@@ -5,6 +5,7 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanBoard } from '@/components/KanbanBoard';
+import { arrayMove } from '@dnd-kit/sortable';
 
 interface Board {
   id: string;
@@ -163,17 +164,51 @@ export default function Board() {
 
   const moveCard = async (cardId: string, newListId: string, newPosition: number) => {
     try {
-      const cardToMove = cards.find(c => c.id === cardId);
-      if (!cardToMove) return;
+      console.log('Moving card:', { cardId, newListId, newPosition });
+      
+      // Perform optimistic update first
+      const cardUpdates = optimisticMoveCard(cardId, newListId, newPosition);
+      
+      if (!cardUpdates || cardUpdates.length === 0) {
+        console.log('No updates needed');
+        return;
+      }
 
-      // Get all cards in the target list, sorted by position
-      const targetListCards = cards
-        .filter(c => c.list_id === newListId && c.id !== cardId)
+      // Then update the database
+      await updateCardPositions(cardUpdates);
+    } catch (error: any) {
+      console.error('Error in moveCard, reverting optimistic update:', error);
+      
+      // Revert the optimistic update on error
+      fetchBoardData();
+      
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const optimisticMoveCard = (cardId: string, newListId: string, newPosition: number) => {
+    console.log('Performing optimistic move:', { cardId, newListId, newPosition });
+    const cardToMove = cards.find(c => c.id === cardId);
+    if (!cardToMove) return;
+
+    const cardUpdates = [];
+    
+    // Handle moving between different lists
+    if (cardToMove.list_id !== newListId) {
+      // Get all cards in the source list (excluding the moved card)
+      const sourceListCards = cards
+        .filter(c => c.list_id === cardToMove.list_id && c.id !== cardId)
         .sort((a, b) => a.position - b.position);
 
-      // Create new positions for all cards in the target list
-      const cardUpdates = [];
-      
+      // Get all cards in the target list
+      const targetListCards = cards
+        .filter(c => c.list_id === newListId)
+        .sort((a, b) => a.position - b.position);
+
       // Add the moved card at the new position
       cardUpdates.push({ id: cardId, list_id: newListId, position: newPosition });
       
@@ -186,19 +221,42 @@ export default function Board() {
         cardUpdates.push({ id: card.id, list_id: card.list_id, position: adjustedPosition });
       });
 
-      // Update all cards in batch
-      await updateCardPositions(cardUpdates);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
+      // Update positions for remaining cards in the source list
+      sourceListCards.forEach((card, index) => {
+        cardUpdates.push({ id: card.id, list_id: card.list_id, position: index });
+      });
+    } else {
+      // Handle reordering within the same list
+      const listCards = cards
+        .filter(c => c.list_id === cardToMove.list_id)
+        .sort((a, b) => a.position - b.position);
+      
+      const oldIndex = listCards.findIndex(c => c.id === cardId);
+      const reorderedCards = arrayMove(listCards, oldIndex, newPosition);
+      
+      reorderedCards.forEach((card, index) => {
+        if (card.position !== index) {
+          cardUpdates.push({ id: card.id, list_id: card.list_id, position: index });
+        }
       });
     }
+
+    // Update local state immediately
+    setCards(prevCards => {
+      const updatedCards = prevCards.map(card => {
+        const update = cardUpdates.find(u => u.id === card.id);
+        return update ? { ...card, list_id: update.list_id, position: update.position } : card;
+      });
+      return updatedCards;
+    });
+
+    return cardUpdates;
   };
 
   const updateCardPositions = async (cardUpdates: { id: string; list_id: string; position: number }[]) => {
     try {
+      console.log('Updating card positions in database:', cardUpdates);
+      
       // Update all cards in a single transaction
       const updates = cardUpdates.map(update => 
         supabase
@@ -212,22 +270,14 @@ export default function Board() {
       // Check for any errors
       const errors = results.filter(result => result.error);
       if (errors.length > 0) {
+        console.error('Database update errors:', errors);
         throw errors[0].error;
       }
 
-      // Update local state
-      setCards(prevCards => 
-        prevCards.map(card => {
-          const update = cardUpdates.find(u => u.id === card.id);
-          return update ? { ...card, list_id: update.list_id, position: update.position } : card;
-        })
-      );
+      console.log('Database updates successful - no local state update needed (optimistic update already done)');
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      console.error('Error updating card positions:', error);
+      throw error; // Re-throw to let the caller handle it
     }
   };
 
@@ -291,6 +341,7 @@ export default function Board() {
           onUpdateCard={updateCard}
           onMoveCard={moveCard}
           onUpdateCardPositions={updateCardPositions}
+          onOptimisticMoveCard={optimisticMoveCard}
         />
       </main>
     </div>

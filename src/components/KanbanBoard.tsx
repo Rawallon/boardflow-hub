@@ -39,6 +39,7 @@ interface KanbanBoardProps {
   onUpdateCard: (cardId: string, updates: Partial<Card>) => Promise<void>;
   onMoveCard: (cardId: string, newListId: string, newPosition: number) => Promise<void>;
   onUpdateCardPositions: (cardUpdates: { id: string; list_id: string; position: number }[]) => Promise<void>;
+  onOptimisticMoveCard: (cardId: string, newListId: string, newPosition: number) => { id: string; list_id: string; position: number }[] | undefined;
 }
 
 export function KanbanBoard({
@@ -49,6 +50,7 @@ export function KanbanBoard({
   onUpdateCard,
   onMoveCard,
   onUpdateCardPositions,
+  onOptimisticMoveCard,
 }: KanbanBoardProps) {
   // Component for managing kanban board with drag and drop functionality
   const [activeCard, setActiveCard] = useState<Card | null>(null);
@@ -80,19 +82,32 @@ export function KanbanBoard({
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    console.log('Drag end event:', { active: active.id, over: over?.id, overData: over?.data.current });
     setActiveCard(null);
     setOverId(null);
 
-    if (!over) return;
+    if (!over) {
+      console.log('No drop target');
+      return;
+    }
 
     const activeCard = cards.find(c => c.id === active.id);
-    if (!activeCard) return;
+    if (!activeCard) {
+      console.log('Active card not found');
+      return;
+    }
 
     const overList = over.data.current?.type === 'list' ? over.id as string : over.data.current?.listId;
-    if (!overList) return;
+    if (!overList) {
+      console.log('No over list found');
+      return;
+    }
+
+    console.log('Drag end details:', { activeCard: activeCard.id, overList, activeList: activeCard.list_id });
 
     // Handle moving card to a different list
     if (activeCard.list_id !== overList) {
+      console.log('Moving between lists');
       const overCards = cards.filter(c => c.list_id === overList).sort((a, b) => a.position - b.position);
       let newPosition = overCards.length; // Default to end
       
@@ -102,9 +117,18 @@ export function KanbanBoard({
         if (overCard) {
           const targetIndex = overCards.findIndex(c => c.id === overCard.id);
           newPosition = targetIndex;
+          console.log('Dropping on card, position:', newPosition);
         }
+      } else {
+        console.log('Dropping on list, position:', newPosition);
       }
       
+      console.log('Performing optimistic update immediately');
+      // Perform optimistic update immediately for instant UI feedback
+      onOptimisticMoveCard(activeCard.id, overList, newPosition);
+      
+      console.log('Calling onMoveCard with:', { cardId: activeCard.id, newListId: overList, newPosition });
+      // Then update the database
       onMoveCard(activeCard.id, overList, newPosition);
     } else {
       // Handle reordering within the same list
@@ -129,21 +153,26 @@ export function KanbanBoard({
         }
       }
       
-      if (oldIndex !== newIndex && newIndex >= 0) {
-        const reorderedCards = arrayMove(listCards, oldIndex, newIndex);
-        
-        // Prepare batch updates for all affected cards
-        const cardUpdates = reorderedCards
-          .map((card, index) => ({ id: card.id, list_id: card.list_id, position: index }))
-          .filter(update => {
-            const originalCard = cards.find(c => c.id === update.id);
-            return originalCard && (originalCard.position !== update.position || originalCard.list_id !== update.list_id);
-          });
-        
-        if (cardUpdates.length > 0) {
-          onUpdateCardPositions(cardUpdates);
+        if (oldIndex !== newIndex && newIndex >= 0) {
+          console.log('Performing optimistic update for same-list reorder');
+          // Perform optimistic update immediately for instant UI feedback
+          onOptimisticMoveCard(activeCard.id, activeCard.list_id, newIndex);
+          
+          // Then update the database
+          const reorderedCards = arrayMove(listCards, oldIndex, newIndex);
+          
+          // Prepare batch updates for all affected cards
+          const cardUpdates = reorderedCards
+            .map((card, index) => ({ id: card.id, list_id: card.list_id, position: index }))
+            .filter(update => {
+              const originalCard = cards.find(c => c.id === update.id);
+              return originalCard && (originalCard.position !== update.position || originalCard.list_id !== update.list_id);
+            });
+          
+          if (cardUpdates.length > 0) {
+            onUpdateCardPositions(cardUpdates);
+          }
         }
-      }
     }
   };
 
