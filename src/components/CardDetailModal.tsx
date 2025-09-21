@@ -6,9 +6,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Edit3, Eye, Save, X, Trash2 } from 'lucide-react';
+import { Edit3, Eye, Save, X, Trash2, EyeOff } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
 
 interface Card {
   id: string;
@@ -30,8 +30,9 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || '');
-  const [isMarkdownMode, setIsMarkdownMode] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     setTitle(card.title);
@@ -58,7 +59,21 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
       setSaving(true);
       await onUpdateCard(card.id, { description: description || null });
       setSaving(false);
+      setHasUnsavedChanges(false);
     }
+  };
+
+  const handleDescriptionChange = (value: string | undefined) => {
+    const newDescription = value || '';
+    setDescription(newDescription);
+    setHasUnsavedChanges(newDescription !== card.description);
+  };
+
+  const handleDescriptionBlur = () => {
+    if (hasUnsavedChanges) {
+      handleSaveDescription();
+    }
+    setIsEditingDescription(false);
   };
 
   const handleDeleteCard = async () => {
@@ -77,6 +92,36 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
       handleSaveTitle();
     }
   };
+
+  // Handle keyboard shortcuts for description editing
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!open) return;
+      
+      // Ctrl/Cmd + E to toggle edit mode
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        setIsEditingDescription(!isEditingDescription);
+      }
+      
+      // Ctrl/Cmd + S to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (hasUnsavedChanges) {
+          handleSaveDescription();
+        }
+      }
+      
+      // Escape to exit edit mode and save
+      if (e.key === 'Escape' && isEditingDescription) {
+        e.preventDefault();
+        handleDescriptionBlur();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, isEditingDescription, hasUnsavedChanges]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,55 +171,76 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
         <div className="flex-1 overflow-hidden">
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium">Description</h3>
-              <div className="flex space-x-2">
-                <Button
-                  size="sm"
-                  variant={isMarkdownMode ? "default" : "outline"}
-                  onClick={() => setIsMarkdownMode(true)}
-                >
-                  <Edit3 className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant={!isMarkdownMode ? "default" : "outline"}
-                  onClick={() => {
-                    setIsMarkdownMode(false);
-                    handleSaveDescription();
-                  }}
-                >
-                  <Eye className="h-4 w-4 mr-1" />
-                  Preview
-                </Button>
+              <div className="flex items-center space-x-2">
+                <h3 className="font-medium">Description</h3>
+                <span className="text-xs text-muted-foreground">
+                  (Click to edit, Ctrl+E to toggle, Ctrl+S to save)
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                {hasUnsavedChanges && (
+                  <span className="text-sm text-amber-600 dark:text-amber-400">
+                    Unsaved changes
+                  </span>
+                )}
+                {hasUnsavedChanges && (
+                  <Button
+                    size="sm"
+                    onClick={handleSaveDescription}
+                    disabled={saving}
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    Save
+                  </Button>
+                )}
               </div>
             </div>
 
             <div className="flex-1 overflow-hidden">
-              {isMarkdownMode ? (
-                <div className="h-full">
-                  <Textarea
+              {isEditingDescription ? (
+                <div className="h-full border rounded-md overflow-hidden">
+                  <MDEditor
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Enter card description using Markdown..."
-                    className="min-h-[300px] resize-none font-mono"
-                    onBlur={handleSaveDescription}
+                    onChange={handleDescriptionChange}
+                    onBlur={handleDescriptionBlur}
+                    data-color-mode="light"
+                    height={400}
+                    visibleDragbar={false}
+                    textareaProps={{
+                      placeholder: 'Enter card description using Markdown...',
+                      style: {
+                        fontSize: 14,
+                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+                      },
+                    }}
+                    preview="edit"
+                    hideToolbar={false}
+                    toolbarHeight={40}
                   />
                 </div>
               ) : (
-                <div className="h-full overflow-auto border rounded-md p-4 bg-muted/30">
+                <div 
+                  className="h-full overflow-auto border rounded-md p-4 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setIsEditingDescription(true)}
+                >
                   {description.trim() ? (
-                    <MDEditor.Markdown 
-                      source={description} 
-                      style={{ 
-                        backgroundColor: 'transparent',
-                        color: 'inherit'
-                      }}
-                    />
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                      <MDEditor.Markdown 
+                        source={description} 
+                        style={{ 
+                          backgroundColor: 'transparent',
+                          color: 'inherit'
+                        }}
+                      />
+                    </div>
                   ) : (
-                    <p className="text-muted-foreground italic">
-                      No description yet. Click "Edit" to add one.
-                    </p>
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <p className="text-muted-foreground italic mb-2">
+                          Click to add a description...
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

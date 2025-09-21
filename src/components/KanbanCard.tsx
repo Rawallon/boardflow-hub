@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
 import { CardDetailModal } from './CardDetailModal';
+import { FileText } from 'lucide-react';
 
 interface CardProps {
   id: string;
@@ -61,13 +62,12 @@ export function KanbanCard({ card, onUpdateCard, onDeleteCard, isDragging = fals
         onClick={() => setShowModal(true)}
       >
         <CardContent className="p-3">
-          <h4 className="font-medium text-sm leading-tight">{card.title}</h4>
-          {card.description && (
-            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-              {card.description.replace(/[#*`]/g, '').substring(0, 100)}
-              {card.description.length > 100 ? '...' : ''}
-            </p>
-          )}
+          <div className="flex items-start justify-between">
+            <h4 className="font-medium text-sm leading-tight flex-1">{card.title}</h4>
+            {card.description && card.description.trim() && (
+              <FileText className="h-4 w-4 text-muted-foreground ml-2 flex-shrink-0" />
+            )}
+          </div>
         </CardContent>
       </Card>
 
