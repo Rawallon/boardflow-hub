@@ -25,6 +25,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchBoards();
+    setupRealtimeSubscriptions();
+    
+    return () => {
+      // Cleanup subscriptions when component unmounts
+      supabase.removeAllChannels();
+    };
   }, []);
 
   const fetchBoards = async () => {
@@ -45,6 +51,58 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const setupRealtimeSubscriptions = () => {
+    console.log('Setting up real-time subscriptions for dashboard');
+
+    // Subscribe to board changes
+    const boardsChannel = supabase
+      .channel('dashboard-boards')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'boards',
+        },
+        (payload) => {
+          console.log('🔵 Dashboard: Board change received:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            const newBoard = payload.new as Board;
+            setBoards(prev => {
+              // Check if board already exists to prevent duplicates
+              const exists = prev.some(board => board.id === newBoard.id);
+              if (exists) {
+                console.log('Board already exists, skipping duplicate');
+                return prev;
+              }
+              return [newBoard, ...prev].sort((a, b) => 
+                new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+              );
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedBoard = payload.new as Board;
+            setBoards(prev => prev.map(board => 
+              board.id === updatedBoard.id ? updatedBoard : board
+            ).sort((a, b) => 
+              new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            ));
+          } else if (payload.eventType === 'DELETE') {
+            const deletedBoard = payload.old as Board;
+            setBoards(prev => prev.filter(board => board.id !== deletedBoard.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Dashboard boards channel status:', status);
+      });
+
+    return () => {
+      console.log('Cleaning up dashboard real-time subscriptions');
+      boardsChannel.unsubscribe();
+    };
   };
 
   const handleCreateBoard = async (title: string, description: string) => {
