@@ -62,10 +62,10 @@ export function KanbanCard({ card, onUpdateCard, onDeleteCard, isDragging = fals
         onClick={() => setShowModal(true)}
       >
         <CardContent className="p-3">
-          <div className="flex items-start justify-between">
-            <h4 className="font-medium text-sm leading-tight flex-1">{card.title}</h4>
+          <div className="flex items-start justify-between gap-2 min-w-0">
+            <h4 className="font-medium text-sm leading-tight flex-1 break-all hyphens-auto overflow-hidden">{card.title}</h4>
             {card.description && card.description.trim() && (
-              <FileText className="h-4 w-4 text-muted-foreground ml-2 flex-shrink-0" />
+              <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
             )}
           </div>
         </CardContent>

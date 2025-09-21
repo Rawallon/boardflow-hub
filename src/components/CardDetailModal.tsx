@@ -130,26 +130,27 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 flex-1">
               {editingTitle ? (
-                <div className="flex-1 flex items-center space-x-2">
+                <div className="flex-1 flex items-start space-x-2 min-w-0">
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onBlur={handleSaveTitle}
-                    className="text-lg font-semibold"
+                    className="text-lg font-semibold flex-1 break-all hyphens-auto overflow-hidden min-w-0"
                     autoFocus
                   />
                   <Button
                     size="sm"
                     onClick={handleSaveTitle}
                     disabled={saving}
+                    className="flex-shrink-0 mt-1"
                   >
                     <Save className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
                 <h2
-                  className="text-lg font-semibold cursor-pointer hover:bg-muted px-2 py-1 rounded flex-1"
+                  className="text-lg font-semibold cursor-pointer hover:bg-muted px-2 py-1 rounded flex-1 break-all hyphens-auto overflow-hidden min-w-0"
                   onClick={() => setEditingTitle(true)}
                 >
                   {card.title}
