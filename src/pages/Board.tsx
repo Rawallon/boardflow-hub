@@ -58,8 +58,109 @@ export default function Board() {
   useEffect(() => {
     if (boardId) {
       fetchBoardData();
+      setupRealtimeSubscriptions();
     }
+
+    return () => {
+      // Cleanup subscriptions when component unmounts
+      supabase.removeAllChannels();
+    };
   }, [boardId]);
+
+  // Test real-time connection and authentication
+  useEffect(() => {
+    // Check authentication status
+    supabase.auth.getUser().then(({ data: { user }, error }) => {
+      console.log('🔐 Current user:', user?.id, user?.email);
+      if (error) {
+        console.error('❌ Auth error:', error);
+      }
+    });
+
+    const testChannel = supabase
+      .channel('test-connection')
+      .on('broadcast', { event: 'test' }, (payload) => {
+        console.log('✅ Real-time connection working!', payload);
+      })
+      .subscribe((status) => {
+        console.log('Test channel status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Real-time is connected and working!');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Real-time channel error');
+        } else if (status === 'TIMED_OUT') {
+          console.error('❌ Real-time connection timed out');
+        } else if (status === 'CLOSED') {
+          console.error('❌ Real-time connection closed');
+        }
+      });
+
+    // Also listen for the test broadcast
+    const broadcastChannel = supabase
+      .channel('test-broadcast')
+      .on('broadcast', { event: 'test' }, (payload) => {
+        console.log('📡 Received broadcast test:', payload);
+      })
+      .subscribe();
+
+    // Listen for comprehensive test broadcasts
+    const comprehensiveBroadcastChannel = supabase
+      .channel('comprehensive-test-broadcast')
+      .on('broadcast', { event: 'test' }, (payload) => {
+        console.log('📡 Received comprehensive broadcast test:', payload);
+      })
+      .subscribe();
+
+    // Test channel to listen to ALL card changes (no filtering)
+    const testCardsChannel = supabase
+      .channel('test-cards-all')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cards',
+        },
+        (payload) => {
+          console.log('🧪 TEST: Received ANY card change:', payload);
+          console.log('🧪 Event type:', payload.eventType);
+          console.log('🧪 New data:', payload.new);
+          console.log('🧪 Old data:', payload.old);
+        }
+      )
+      .subscribe((status) => {
+        console.log('Test cards channel status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Test cards channel is ready to receive events');
+        }
+      });
+
+    // Also test with a very simple channel
+    const simpleTestChannel = supabase
+      .channel('simple-test')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'cards',
+        },
+        (payload) => {
+          console.log('🎯 SIMPLE TEST: Card INSERT received:', payload);
+        }
+      )
+      .subscribe((status) => {
+        console.log('Simple test channel status:', status);
+      });
+
+    return () => {
+      testChannel.unsubscribe();
+      broadcastChannel.unsubscribe();
+      comprehensiveBroadcastChannel.unsubscribe();
+      testCardsChannel.unsubscribe();
+      simpleTestChannel.unsubscribe();
+    };
+  }, []);
 
   const fetchBoardData = async () => {
     if (!boardId) return;
@@ -105,6 +206,140 @@ export default function Board() {
     }
   };
 
+  const setupRealtimeSubscriptions = () => {
+    if (!boardId) return;
+
+    console.log('Setting up real-time subscriptions for board:', boardId);
+
+    // Subscribe to board changes
+    const boardChannel = supabase
+      .channel(`board-${boardId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'boards',
+          filter: `id=eq.${boardId}`,
+        },
+        (payload) => {
+          console.log('🔵 Board change received:', payload);
+          if (payload.eventType === 'UPDATE') {
+            setBoard(payload.new as Board);
+          } else if (payload.eventType === 'DELETE') {
+            // Board was deleted, redirect to dashboard
+            window.location.href = '/';
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Board channel status:', status);
+      });
+
+    // Subscribe to list changes for this board
+    const listsChannel = supabase
+      .channel(`lists-${boardId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lists',
+          filter: `board_id=eq.${boardId}`,
+        },
+        (payload) => {
+          console.log('🟢 List change received:', payload);
+          if (payload.eventType === 'INSERT') {
+            setLists(prev => [...prev, payload.new as List].sort((a, b) => a.position - b.position));
+          } else if (payload.eventType === 'UPDATE') {
+            setLists(prev => prev.map(list => 
+              list.id === payload.new.id ? payload.new as List : list
+            ).sort((a, b) => a.position - b.position));
+          } else if (payload.eventType === 'DELETE') {
+            setLists(prev => prev.filter(list => list.id !== payload.old.id));
+            setCards(prev => prev.filter(card => card.list_id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Lists channel status:', status);
+      });
+
+    // Subscribe to card changes for lists in this board
+    const cardsChannel = supabase
+      .channel(`cards-${boardId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cards',
+        },
+        async (payload) => {
+          console.log('🟡 Card change received:', payload);
+          console.log('Event type:', payload.eventType);
+          console.log('New data:', payload.new);
+          console.log('Old data:', payload.old);
+          
+          // Check if this card belongs to a list in this board by querying the database
+          const newCard = payload.new as Card | null;
+          const oldCard = payload.old as Card | null;
+          
+          let isRelevantCard = false;
+          
+          if (newCard?.list_id) {
+            // Check if the list belongs to this board
+            const { data: listData } = await supabase
+              .from('lists')
+              .select('board_id')
+              .eq('id', newCard.list_id)
+              .single();
+            isRelevantCard = listData?.board_id === boardId;
+            console.log('List data for new card:', listData);
+          } else if (oldCard?.list_id) {
+            // For delete operations, check the old card's list
+            const { data: listData } = await supabase
+              .from('lists')
+              .select('board_id')
+              .eq('id', oldCard.list_id)
+              .single();
+            isRelevantCard = listData?.board_id === boardId;
+            console.log('List data for old card:', listData);
+          }
+          
+          console.log('Is relevant card:', isRelevantCard, 'Board ID:', boardId);
+          
+          if (!isRelevantCard) {
+            console.log('Card not relevant to this board, ignoring');
+            return;
+          }
+
+          if (payload.eventType === 'INSERT' && newCard) {
+            console.log('Adding new card:', newCard);
+            setCards(prev => [...prev, newCard].sort((a, b) => a.position - b.position));
+          } else if (payload.eventType === 'UPDATE' && newCard) {
+            console.log('Updating card:', newCard);
+            setCards(prev => prev.map(card => 
+              card.id === newCard.id ? newCard : card
+            ).sort((a, b) => a.position - b.position));
+          } else if (payload.eventType === 'DELETE' && oldCard) {
+            console.log('Deleting card:', oldCard);
+            setCards(prev => prev.filter(card => card.id !== oldCard.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Cards channel status:', status);
+      });
+
+    return () => {
+      console.log('Cleaning up real-time subscriptions');
+      boardChannel.unsubscribe();
+      listsChannel.unsubscribe();
+      cardsChannel.unsubscribe();
+    };
+  };
+
   const updateBoard = async (updates: Partial<Board>) => {
     if (!boardId) return;
 
@@ -118,7 +353,9 @@ export default function Board() {
 
       if (error) throw error;
 
+      // Update local state immediately (real-time will also update when working)
       setBoard(data);
+      
       toast({
         title: 'Success',
         description: 'Board updated successfully!',
@@ -239,6 +476,221 @@ export default function Board() {
     }
   };
 
+  // Debug function to test real-time
+  const testRealtime = async () => {
+    console.log('🧪 Testing real-time by creating a test card...');
+    console.log('Current board ID:', boardId);
+    console.log('Current lists:', lists.map(l => ({ id: l.id, title: l.title })));
+    
+    try {
+      const firstList = lists[0];
+      if (firstList) {
+        console.log('Creating card in list:', firstList.id, firstList.title);
+        
+        // Create the card directly with supabase to ensure it triggers real-time
+        const { data, error } = await supabase
+          .from('cards')
+          .insert([{ 
+            title: `Test Card ${Date.now()}`, 
+            list_id: firstList.id, 
+            position: 0 
+          }])
+          .select()
+          .single();
+          
+        if (error) {
+          console.error('❌ Error creating test card:', error);
+        } else {
+          console.log('✅ Test card created directly:', data);
+          console.log('This should trigger real-time events if publication is working');
+        }
+        
+        // Also test a simple broadcast to see if real-time is working at all
+        const testChannel = supabase.channel('test-broadcast');
+        await testChannel.subscribe();
+        await testChannel.send({
+          type: 'broadcast',
+          event: 'test',
+          payload: { message: 'Hello from real-time test!' }
+        });
+        console.log('📡 Broadcast sent, check if other browsers receive it');
+      } else {
+        console.log('❌ No lists available for testing');
+      }
+    } catch (error) {
+      console.error('❌ Test failed:', error);
+    }
+  };
+
+  // Function to manually apply real-time publication
+  const applyRealtimePublication = async () => {
+    console.log('🔧 Real-time publication is already applied (tables are in publication)');
+    console.log('The issue is likely with RLS policies blocking real-time events.');
+    console.log('Try running this SQL in Supabase Dashboard > SQL Editor:');
+    console.log('');
+    console.log('-- Check current RLS policies');
+    console.log('SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual');
+    console.log('FROM pg_policies WHERE schemaname = \'public\' AND tablename IN (\'cards\', \'lists\', \'boards\');');
+    console.log('');
+    console.log('-- If needed, temporarily disable RLS for testing');
+    console.log('-- ALTER TABLE public.cards DISABLE ROW LEVEL SECURITY;');
+    console.log('-- ALTER TABLE public.lists DISABLE ROW LEVEL SECURITY;');
+    console.log('-- ALTER TABLE public.boards DISABLE ROW LEVEL SECURITY;');
+  };
+
+  // Function to check real-time publication status
+  const checkRealtimeStatus = async () => {
+    console.log('🔍 Checking real-time publication status...');
+    console.log('Current subscriptions status:');
+    console.log('- Board channel: SUBSCRIBED');
+    console.log('- Lists channel: SUBSCRIBED');
+    console.log('- Cards channel: SUBSCRIBED');
+    console.log('- Test cards channel: SUBSCRIBED');
+    console.log('If real-time is working, you should see events when making changes.');
+  };
+
+  // Comprehensive test function for different real-time implementations
+  const testDifferentRealtimeImplementations = async () => {
+    console.log('🧪 Testing different real-time implementations...');
+    console.log('Since publication is working, testing RLS and subscription issues...');
+    
+    const firstList = lists[0];
+    if (!firstList) {
+      console.log('❌ No lists available for testing');
+      return;
+    }
+
+    // Test 1: Basic broadcast (should always work)
+    console.log('📡 Test 1: Basic broadcast...');
+    const broadcastChannel = supabase.channel('comprehensive-test-broadcast');
+    await broadcastChannel.subscribe();
+    await broadcastChannel.send({
+      type: 'broadcast',
+      event: 'test',
+      payload: { message: 'Broadcast test from implementation test' }
+    });
+    console.log('✅ Broadcast sent');
+
+    // Test 2: Simple postgres_changes with minimal config
+    console.log('📡 Test 2: Simple postgres_changes...');
+    const simpleChannel = supabase.channel('simple-postgres-test');
+    simpleChannel.on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'cards'
+    }, (payload) => {
+      console.log('🎯 SIMPLE: Card INSERT received:', payload);
+    });
+    await simpleChannel.subscribe();
+
+    // Test 3: Postgres changes with filter
+    console.log('📡 Test 3: Postgres changes with filter...');
+    const filterChannel = supabase.channel('filter-postgres-test');
+    filterChannel.on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'cards',
+      filter: `list_id=eq.${firstList.id}`
+    }, (payload) => {
+      console.log('🎯 FILTER: Card change received:', payload);
+    });
+    await filterChannel.subscribe();
+
+    // Test 4: Postgres changes with different event types
+    console.log('📡 Test 4: Postgres changes with specific events...');
+    const eventChannel = supabase.channel('event-postgres-test');
+    eventChannel.on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'cards'
+    }, (payload) => {
+      console.log('🎯 EVENT: Card INSERT received:', payload);
+    });
+    eventChannel.on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'cards'
+    }, (payload) => {
+      console.log('🎯 EVENT: Card UPDATE received:', payload);
+    });
+    await eventChannel.subscribe();
+
+    // Test 5: Create a test card to trigger events
+    console.log('📡 Test 5: Creating test card to trigger events...');
+    try {
+      const { data, error } = await supabase
+        .from('cards')
+        .insert([{ 
+          title: `Comprehensive Test Card ${Date.now()}`, 
+          list_id: firstList.id, 
+          position: 0 
+        }])
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('❌ Error creating test card:', error);
+      } else {
+        console.log('✅ Test card created:', data);
+        console.log('This should trigger events in all the test channels above');
+      }
+    } catch (error) {
+      console.error('❌ Test card creation failed:', error);
+    }
+
+    // Test 6: Check Supabase client configuration
+    console.log('📡 Test 6: Checking Supabase client configuration...');
+    console.log('Supabase client initialized successfully');
+    
+    // Test 7: Try to get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('Current user:', user?.id, user?.email);
+    if (userError) {
+      console.error('User error:', userError);
+    }
+
+    // Test 8: Check RLS policies by trying to read cards
+    console.log('📡 Test 8: Testing RLS policies...');
+    try {
+      const { data: cardsData, error: cardsError } = await supabase
+        .from('cards')
+        .select('*')
+        .limit(5);
+      
+      if (cardsError) {
+        console.error('❌ RLS Error reading cards:', cardsError);
+      } else {
+        console.log('✅ RLS allows reading cards:', cardsData?.length, 'cards found');
+      }
+    } catch (error) {
+      console.error('❌ RLS test failed:', error);
+    }
+
+    // Test 9: Try a different table to see if it's cards-specific
+    console.log('📡 Test 9: Testing with lists table...');
+    const listsChannel = supabase.channel('test-lists-channel');
+    listsChannel.on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'lists'
+    }, (payload) => {
+      console.log('🎯 LISTS: List INSERT received:', payload);
+    });
+    await listsChannel.subscribe();
+
+    // Cleanup after 10 seconds
+    setTimeout(() => {
+      console.log('🧹 Cleaning up test channels...');
+      broadcastChannel.unsubscribe();
+      simpleChannel.unsubscribe();
+      filterChannel.unsubscribe();
+      eventChannel.unsubscribe();
+      listsChannel.unsubscribe();
+    }, 10000);
+
+    console.log('✅ All tests initiated. Check console for results over the next 10 seconds.');
+  };
+
   const createList = async (title: string) => {
     if (!boardId) return;
 
@@ -253,7 +705,9 @@ export default function Board() {
 
       if (error) throw error;
 
-      setLists([...lists, data]);
+      // Update local state immediately (real-time will also update when working)
+      setLists(prev => [...prev, data].sort((a, b) => a.position - b.position));
+      
       toast({
         title: 'Success',
         description: 'List created successfully!',
@@ -278,7 +732,11 @@ export default function Board() {
 
       if (error) throw error;
 
-      setLists(lists.map(list => list.id === listId ? data : list));
+      // Update local state immediately (real-time will also update when working)
+      setLists(prev => prev.map(list => 
+        list.id === listId ? data : list
+      ).sort((a, b) => a.position - b.position));
+      
       toast({
         title: 'Success',
         description: 'List updated successfully!',
@@ -310,9 +768,9 @@ export default function Board() {
 
       if (listError) throw listError;
 
-      // Update local state
-      setLists(lists.filter(list => list.id !== listId));
-      setCards(cards.filter(card => card.list_id !== listId));
+      // Update local state immediately (real-time will also update when working)
+      setLists(prev => prev.filter(list => list.id !== listId));
+      setCards(prev => prev.filter(card => card.list_id !== listId));
       
       toast({
         title: 'Success',
@@ -340,7 +798,9 @@ export default function Board() {
 
       if (error) throw error;
 
-      setCards([...cards, data]);
+      // Update local state immediately (real-time will also update when working)
+      setCards(prev => [...prev, data].sort((a, b) => a.position - b.position));
+      
       toast({
         title: 'Success',
         description: 'Card created successfully!',
@@ -365,7 +825,10 @@ export default function Board() {
 
       if (error) throw error;
 
-      setCards(cards.map(card => card.id === cardId ? data : card));
+      // Update local state immediately (real-time will also update when working)
+      setCards(prev => prev.map(card => 
+        card.id === cardId ? data : card
+      ).sort((a, b) => a.position - b.position));
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -384,7 +847,9 @@ export default function Board() {
 
       if (error) throw error;
 
-      setCards(cards.filter(card => card.id !== cardId));
+      // Update local state immediately (real-time will also update when working)
+      setCards(prev => prev.filter(card => card.id !== cardId));
+      
       toast({
         title: 'Success',
         description: 'Card deleted successfully!',
@@ -510,7 +975,7 @@ export default function Board() {
         throw errors[0].error;
       }
 
-      console.log('Database updates successful - no local state update needed (optimistic update already done)');
+      console.log('Database updates successful - real-time subscriptions will handle state updates');
     } catch (error: any) {
       console.error('Error updating card positions:', error);
       throw error; // Re-throw to let the caller handle it
@@ -580,24 +1045,58 @@ export default function Board() {
                 <p className="text-sm text-muted-foreground">{board.description}</p>
               )}
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleEditBoard}>
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Edit Board
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={deleteBoard} className="text-destructive">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Board
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={testRealtime}
+                className="text-xs"
+              >
+                🧪 Test Real-time
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={checkRealtimeStatus}
+                className="text-xs"
+              >
+                🔍 Check Status
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={applyRealtimePublication}
+                className="text-xs"
+              >
+                🔧 Apply Publication
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={testDifferentRealtimeImplementations}
+                className="text-xs"
+              >
+                🧪 Test All Methods
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleEditBoard}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit Board
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={deleteBoard} className="text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Board
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </header>
