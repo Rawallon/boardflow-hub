@@ -388,6 +388,15 @@ export default function Board() {
       return;
     }
 
+    // Check if there are any changes to save
+    const hasChanges = editBoardTitle.trim() !== board?.title || 
+                      editBoardDescription.trim() !== (board?.description || '');
+    
+    if (!hasChanges) {
+      setShowBoardEdit(false);
+      return;
+    }
+
     await updateBoard({
       title: editBoardTitle.trim(),
       description: editBoardDescription.trim() || null,
@@ -844,12 +853,6 @@ export default function Board() {
                 id="board-title"
                 value={editBoardTitle}
                 onChange={(e) => setEditBoardTitle(e.target.value)}
-                onBlur={() => {
-                  // Only save on blur if the dialog is still open
-                  if (showBoardEdit) {
-                    handleSaveBoard();
-                  }
-                }}
                 placeholder="Enter board title..."
                 required
                 autoFocus
@@ -871,7 +874,11 @@ export default function Board() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleSaveBoard}
+                onClick={() => {
+                  setEditBoardTitle(board?.title || '');
+                  setEditBoardDescription(board?.description || '');
+                  setShowBoardEdit(false);
+                }}
               >
                 Cancel
               </Button>
