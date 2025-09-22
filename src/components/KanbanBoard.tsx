@@ -48,6 +48,7 @@ interface KanbanBoardProps {
   onOptimisticMoveCard: (cardId: string, newListId: string, newPosition: number) => { id: string; list_id: string; position: number }[] | undefined;
   onMoveList: (listId: string, newPosition: number) => Promise<void>;
   onOptimisticMoveList: (listId: string, newPosition: number) => { id: string; position: number }[] | undefined;
+  readOnly?: boolean;
 }
 
 export function KanbanBoard({
@@ -67,6 +68,7 @@ export function KanbanBoard({
   onOptimisticMoveCard,
   onMoveList,
   onOptimisticMoveList,
+  readOnly = false,
 }: KanbanBoardProps) {
   // Component for managing kanban board with drag and drop functionality
   const [activeCard, setActiveCard] = useState<Card | null>(null);
@@ -80,10 +82,13 @@ export function KanbanBoard({
       activationConstraint: {
         distance: 8,
       },
+      disabled: readOnly,
     })
   );
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (readOnly) return;
+    
     const { active } = event;
     
     if (active.data.current?.type === 'card') {
@@ -96,11 +101,15 @@ export function KanbanBoard({
   };
 
   const handleDragOver = (event: DragOverEvent) => {
+    if (readOnly) return;
+    
     const { over } = event;
     setOverId(over ? over.id as string : null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (readOnly) return;
+    
     const { active, over } = event;
     console.log('Drag end event:', { active: active.id, over: over?.id, overData: over?.data.current });
     setActiveCard(null);
@@ -262,48 +271,51 @@ export function KanbanBoard({
                 onUpdateList={onUpdateList}
                 onDeleteList={onDeleteList}
                 onDuplicateList={onDuplicateList}
+                readOnly={readOnly}
               />
             ))}
           </SortableContext>
 
-          <div className="flex-shrink-0 w-80">
-            {showAddList ? (
-              <form onSubmit={handleCreateList} className="bg-card rounded-lg p-4 border">
-                <Input
-                  value={newListTitle}
-                  onChange={(e) => setNewListTitle(e.target.value)}
-                  placeholder="Enter list title..."
-                  className="mb-3"
-                  autoFocus
-                />
-                <div className="flex space-x-2">
-                  <Button type="submit" size="sm">
-                    Add List
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowAddList(false);
-                      setNewListTitle('');
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <Button
-                variant="ghost"
-                className="w-full h-12 border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50"
-                onClick={() => setShowAddList(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add another list
-              </Button>
-            )}
-          </div>
+          {!readOnly && (
+            <div className="flex-shrink-0 w-80">
+              {showAddList ? (
+                <form onSubmit={handleCreateList} className="bg-card rounded-lg p-4 border">
+                  <Input
+                    value={newListTitle}
+                    onChange={(e) => setNewListTitle(e.target.value)}
+                    placeholder="Enter list title..."
+                    className="mb-3"
+                    autoFocus
+                  />
+                  <div className="flex space-x-2">
+                    <Button type="submit" size="sm">
+                      Add List
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowAddList(false);
+                        setNewListTitle('');
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="w-full h-12 border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50"
+                  onClick={() => setShowAddList(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add another list
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

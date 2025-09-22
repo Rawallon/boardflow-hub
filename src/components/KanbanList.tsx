@@ -54,9 +54,10 @@ interface KanbanListProps {
   onUpdateList: (listId: string, updates: Partial<List>) => Promise<void>;
   onDeleteList: (listId: string) => Promise<void>;
   onDuplicateList: (listId: string, newTitle: string) => Promise<void>;
+  readOnly?: boolean;
 }
 
-export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCard, onUpdateList, onDeleteList, onDuplicateList }: KanbanListProps) {
+export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCard, onUpdateList, onDeleteList, onDuplicateList, readOnly = false }: KanbanListProps) {
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [isOver, setIsOver] = useState(false);
@@ -199,8 +200,10 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
               </div>
             ) : (
               <h3 
-                className="font-semibold text-foreground cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded flex-1"
-                onClick={() => setIsEditingTitle(true)}
+                className={`font-semibold text-foreground flex-1 ${
+                  readOnly ? '' : 'cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded'
+                }`}
+                onClick={readOnly ? undefined : () => setIsEditingTitle(true)}
               >
                 {list.title}
               </h3>
@@ -208,27 +211,29 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-muted-foreground">{cards.length}</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                  <MoreHorizontal className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setIsEditingTitle(true)}>
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDuplicateList}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Duplicate
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowDeleteConfirm(true)} className="text-destructive">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {!readOnly && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <MoreHorizontal className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setIsEditingTitle(true)}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDuplicateList}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Duplicate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowDeleteConfirm(true)} className="text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
@@ -250,6 +255,7 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
                   onUpdateCard={onUpdateCard}
                   onDeleteCard={onDeleteCard}
                   isDragOver={dragOverCardId === card.id}
+                  readOnly={readOnly}
                 />
               </div>
             ))}
@@ -260,44 +266,46 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
           </SortableContext>
         </div>
 
-        <div className="mt-4">
-          {showAddCard ? (
-            <form onSubmit={handleCreateCard} className="space-y-2">
-              <Input
-                value={newCardTitle}
-                onChange={(e) => setNewCardTitle(e.target.value)}
-                placeholder="Enter card title..."
-                className="bg-background"
-                autoFocus
-              />
-              <div className="flex space-x-2">
-                <Button type="submit" size="sm">
-                  Add Card
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowAddCard(false);
-                    setNewCardTitle('');
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-muted-foreground hover:text-foreground"
-              onClick={() => setShowAddCard(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add a card
-            </Button>
-          )}
-        </div>
+        {!readOnly && (
+          <div className="mt-4">
+            {showAddCard ? (
+              <form onSubmit={handleCreateCard} className="space-y-2">
+                <Input
+                  value={newCardTitle}
+                  onChange={(e) => setNewCardTitle(e.target.value)}
+                  placeholder="Enter card title..."
+                  className="bg-background"
+                  autoFocus
+                />
+                <div className="flex space-x-2">
+                  <Button type="submit" size="sm">
+                    Add Card
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowAddCard(false);
+                      setNewCardTitle('');
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAddCard(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add a card
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Duplicate List Modal */}

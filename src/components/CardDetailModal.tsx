@@ -34,9 +34,10 @@ interface CardDetailModalProps {
   onOpenChange: (open: boolean) => void;
   onUpdateCard: (cardId: string, updates: Partial<Card>) => Promise<void>;
   onDeleteCard: (cardId: string) => Promise<void>;
+  readOnly?: boolean;
 }
 
-export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDeleteCard }: CardDetailModalProps) {
+export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDeleteCard, readOnly = false }: CardDetailModalProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || '');
@@ -194,7 +195,7 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 flex-1">
-              {editingTitle ? (
+              {editingTitle && !readOnly ? (
                 <div className="flex-1 flex items-start space-x-2 min-w-0">
                   <Input
                     value={title}
@@ -215,22 +216,26 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
                 </div>
               ) : (
                 <h2
-                  className="text-lg font-semibold cursor-pointer hover:bg-muted px-2 py-1 rounded flex-1 break-all hyphens-auto overflow-hidden min-w-0"
-                  onClick={() => setEditingTitle(true)}
+                  className={`text-lg font-semibold flex-1 break-all hyphens-auto overflow-hidden min-w-0 ${
+                    readOnly ? '' : 'cursor-pointer hover:bg-muted px-2 py-1 rounded'
+                  }`}
+                  onClick={readOnly ? undefined : () => setEditingTitle(true)}
                 >
                   {card.title}
                 </h2>
               )}
             </div>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="ml-4"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Delete
-            </Button>
+            {!readOnly && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="ml-4"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete
+              </Button>
+            )}
           </div>
         </DialogHeader>
 
@@ -239,31 +244,35 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
                 <h3 className="font-medium">Description</h3>
-                <span className="text-xs text-muted-foreground">
-                  (Click to edit, Ctrl+E to toggle, Ctrl+S to save)
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                {hasUnsavedChanges && (
-                  <span className="text-sm text-amber-600 dark:text-amber-400">
-                    Unsaved changes
+                {!readOnly && (
+                  <span className="text-xs text-muted-foreground">
+                    (Click to edit, Ctrl+E to toggle, Ctrl+S to save)
                   </span>
                 )}
-                {hasUnsavedChanges && (
-                  <Button
-                    size="sm"
-                    onClick={handleSaveDescription}
-                    disabled={saving}
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    Save
-                  </Button>
-                )}
               </div>
+              {!readOnly && (
+                <div className="flex items-center space-x-2">
+                  {hasUnsavedChanges && (
+                    <span className="text-sm text-amber-600 dark:text-amber-400">
+                      Unsaved changes
+                    </span>
+                  )}
+                  {hasUnsavedChanges && (
+                    <Button
+                      size="sm"
+                      onClick={handleSaveDescription}
+                      disabled={saving}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-hidden">
-              {isEditingDescription ? (
+              {isEditingDescription && !readOnly ? (
                 <div className="h-full border rounded-md overflow-hidden" ref={mdEditorRef}>
                   <MDEditor
                     value={description}
@@ -287,8 +296,10 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
                 </div>
               ) : (
                 <div 
-                  className="h-full overflow-auto border rounded-md p-4 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => setIsEditingDescription(true)}
+                  className={`h-full overflow-auto border rounded-md p-4 bg-muted/30 transition-colors ${
+                    readOnly ? '' : 'cursor-pointer hover:bg-muted/50'
+                  }`}
+                  onClick={readOnly ? undefined : () => setIsEditingDescription(true)}
                 >
                   {description.trim() ? (
                     <div className="prose prose-sm max-w-none dark:prose-invert">

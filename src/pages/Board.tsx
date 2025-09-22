@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, Settings, Edit2, Trash2, RefreshCw, Palette } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Plus, Settings, Edit2, Trash2, RefreshCw, Palette, Share2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { BoardCustomizationDialog } from '@/components/BoardCustomizationDialog';
+import { BoardSharingDialog } from '@/components/BoardSharingDialog';
 import { arrayMove } from '@dnd-kit/sortable';
 import {
   DropdownMenu,
@@ -70,10 +72,12 @@ export default function Board() {
   const [inlineBoardTitle, setInlineBoardTitle] = useState('');
   const [showCustomization, setShowCustomization] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userRole, setUserRole] = useState<'owner' | 'editor' | 'viewer' | null>(null);
 
   useEffect(() => {
     if (boardId) {
       fetchBoardData();
+      fetchUserRole();
       setupRealtimeSubscriptions();
       
       // Set up a periodic refresh as a fallback for real-time issues
@@ -165,6 +169,44 @@ export default function Board() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserRole = async () => {
+    if (!boardId) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Check if user is the owner
+      const { data: boardData } = await supabase
+        .from('boards')
+        .select('owner_id')
+        .eq('id', boardId)
+        .single();
+
+      if (boardData?.owner_id === user.id) {
+        setUserRole('owner');
+        return;
+      }
+
+      // Check if user has a membership
+      const { data: membership } = await supabase
+        .from('board_memberships')
+        .select('role')
+        .eq('board_id', boardId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (membership) {
+        setUserRole(membership.role as 'editor' | 'viewer');
+      } else {
+        setUserRole('viewer'); // Default to viewer if no explicit membership
+      }
+    } catch (error: any) {
+      console.error('Error fetching user role:', error);
+      setUserRole('viewer'); // Default to viewer on error
     }
   };
 
@@ -1094,6 +1136,13 @@ export default function Board() {
               {board.description && (
                 <p className="text-sm text-muted-foreground">{board.description}</p>
               )}
+              {userRole && (
+                <div className="mt-1">
+                  <Badge variant={userRole === 'owner' ? 'default' : userRole === 'editor' ? 'secondary' : 'outline'}>
+                    {userRole === 'owner' ? 'Owner' : userRole === 'editor' ? 'Editor' : 'Viewer'}
+                  </Badge>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button 
@@ -1108,7 +1157,16 @@ export default function Board() {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
-              <DropdownMenu>
+              {userRole === 'owner' && (
+                <BoardSharingDialog boardId={boardId!} boardTitle={board.title}>
+                  <Button variant="ghost" size="sm">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share
+                  </Button>
+                </BoardSharingDialog>
+              )}
+              {userRole !== 'viewer' && (
+                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm">
                     <Settings className="h-4 w-4 mr-2" />
@@ -1130,6 +1188,7 @@ export default function Board() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              )}
             </div>
           </div>
         </div>
@@ -1153,6 +1212,7 @@ export default function Board() {
           onOptimisticMoveCard={optimisticMoveCard}
           onMoveList={moveList}
           onOptimisticMoveList={optimisticMoveList}
+          readOnly={userRole === 'viewer'}
         />
       </main>
 

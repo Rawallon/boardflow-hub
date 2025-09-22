@@ -10,6 +10,8 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Board from "./pages/Board";
 import NotFound from "./pages/NotFound";
+import { InvitationHandler } from "./components/InvitationHandler";
+import { PublicBoardView } from "./components/PublicBoardView";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,8 @@ const App = () => (
                 <Board />
               </ProtectedRoute>
             } />
+            <Route path="/invite/:token" element={<InvitationHandler />} />
+            <Route path="/board/:boardId/shared/:token" element={<PublicBoardView />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

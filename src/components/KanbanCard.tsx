@@ -19,9 +19,10 @@ interface KanbanCardProps {
   onDeleteCard: (cardId: string) => Promise<void>;
   isDragging?: boolean;
   isDragOver?: boolean;
+  readOnly?: boolean;
 }
 
-export function KanbanCard({ card, onUpdateCard, onDeleteCard, isDragging = false, isDragOver = false }: KanbanCardProps) {
+export function KanbanCard({ card, onUpdateCard, onDeleteCard, isDragging = false, isDragOver = false, readOnly = false }: KanbanCardProps) {
   const [showModal, setShowModal] = useState(false);
 
   const {
@@ -38,6 +39,7 @@ export function KanbanCard({ card, onUpdateCard, onDeleteCard, isDragging = fals
       card,
       listId: card.list_id,
     },
+    disabled: readOnly,
   });
 
   const style = {
@@ -77,6 +79,7 @@ export function KanbanCard({ card, onUpdateCard, onDeleteCard, isDragging = fals
         onOpenChange={setShowModal}
         onUpdateCard={onUpdateCard}
         onDeleteCard={onDeleteCard}
+        readOnly={readOnly}
       />
     </>
   );
