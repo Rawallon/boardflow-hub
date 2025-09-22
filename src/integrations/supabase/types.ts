@@ -48,6 +48,9 @@ export type Database = {
       }
       boards: {
         Row: {
+          background_color: string | null
+          background_image_scale: string | null
+          background_image_url: string | null
           created_at: string
           description: string | null
           id: string
@@ -57,6 +60,9 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          background_color?: string | null
+          background_image_scale?: string | null
+          background_image_url?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -66,6 +72,9 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          background_color?: string | null
+          background_image_scale?: string | null
+          background_image_url?: string | null
           created_at?: string
           description?: string | null
           id?: string

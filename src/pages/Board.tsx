@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, Settings, Edit2, Trash2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Settings, Edit2, Trash2, RefreshCw, Palette } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanBoard } from '@/components/KanbanBoard';
+import { BoardCustomizationDialog } from '@/components/BoardCustomizationDialog';
 import { arrayMove } from '@dnd-kit/sortable';
 import {
   DropdownMenu,
@@ -25,6 +26,9 @@ interface Board {
   id: string;
   title: string;
   description: string | null;
+  background_color: string | null;
+  background_image_url: string | null;
+  background_image_scale: string | null;
 }
 
 interface List {
@@ -54,6 +58,7 @@ export default function Board() {
   const [editBoardDescription, setEditBoardDescription] = useState('');
   const [isEditingBoardTitle, setIsEditingBoardTitle] = useState(false);
   const [inlineBoardTitle, setInlineBoardTitle] = useState('');
+  const [showCustomization, setShowCustomization] = useState(false);
 
   useEffect(() => {
     if (boardId) {
@@ -476,6 +481,14 @@ export default function Board() {
       e.preventDefault();
       handleSaveInlineBoardTitle();
     }
+  };
+
+  const handleSaveCustomization = async (customization: {
+    background_color: string | null;
+    background_image_url: string | null;
+    background_image_scale: string | null;
+  }) => {
+    await updateBoard(customization);
   };
 
 
@@ -994,8 +1007,54 @@ export default function Board() {
     );
   }
 
+  // Generate background styles
+  const getBackgroundStyles = () => {
+    const styles: React.CSSProperties = {};
+    
+    if (board?.background_color) {
+      styles.backgroundColor = board.background_color;
+    }
+    
+    if (board?.background_image_url) {
+      styles.backgroundImage = `url(${board.background_image_url})`;
+      
+      const scale = board.background_image_scale || 'cover';
+      switch (scale) {
+        case 'cover':
+          styles.backgroundSize = 'cover';
+          styles.backgroundRepeat = 'no-repeat';
+          styles.backgroundPosition = 'center';
+          break;
+        case 'contain':
+          styles.backgroundSize = 'contain';
+          styles.backgroundRepeat = 'no-repeat';
+          styles.backgroundPosition = 'center';
+          break;
+        case 'stretch':
+          styles.backgroundSize = '100% 100%';
+          styles.backgroundRepeat = 'no-repeat';
+          break;
+        case 'repeat':
+          styles.backgroundSize = 'auto';
+          styles.backgroundRepeat = 'repeat';
+          break;
+        case 'center':
+          styles.backgroundSize = 'auto';
+          styles.backgroundRepeat = 'no-repeat';
+          styles.backgroundPosition = 'center';
+          break;
+        default:
+          styles.backgroundSize = 'cover';
+          styles.backgroundRepeat = 'no-repeat';
+          styles.backgroundPosition = 'center';
+      }
+    }
+    
+    return styles;
+  };
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen" style={getBackgroundStyles()}>
       <header className="border-b bg-card">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16 space-x-4">
@@ -1051,6 +1110,10 @@ export default function Board() {
                   <DropdownMenuItem onClick={handleEditBoard}>
                     <Edit2 className="h-4 w-4 mr-2" />
                     Edit Board
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowCustomization(true)}>
+                    <Palette className="h-4 w-4 mr-2" />
+                    Customize Appearance
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={deleteBoard} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -1135,6 +1198,14 @@ export default function Board() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Board Customization Dialog */}
+      <BoardCustomizationDialog
+        open={showCustomization}
+        onOpenChange={setShowCustomization}
+        board={board}
+        onSave={handleSaveCustomization}
+      />
     </div>
   );
 }
