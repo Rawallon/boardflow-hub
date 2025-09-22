@@ -258,6 +258,19 @@ export default function Board() {
           }
         }
       )
+      .on('broadcast', { event: 'board_customization_changed' }, (payload) => {
+        console.log('🎨 Board customization broadcast received:', payload);
+        const { background_color, background_image_url, background_image_scale } = payload.payload as any;
+        setBoard(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            background_color: background_color ?? prev.background_color,
+            background_image_url: background_image_url ?? prev.background_image_url,
+            background_image_scale: background_image_scale ?? prev.background_image_scale,
+          } as Board;
+        });
+      })
       .on('broadcast', { event: 'list_deleted' }, (payload) => {
         console.log('📡 List deletion broadcast received:', payload);
         const { listId } = payload.payload;
@@ -432,6 +445,31 @@ export default function Board() {
         setBoard(data);
       } else {
         await fetchBoardData();
+      }
+
+      // Broadcast customization changes so invited users get live updates
+      const changedCustomization: Partial<Board> = {};
+      if (Object.prototype.hasOwnProperty.call(updates, 'background_color')) {
+        changedCustomization.background_color = updates.background_color as string | null;
+      }
+      if (Object.prototype.hasOwnProperty.call(updates, 'background_image_url')) {
+        changedCustomization.background_image_url = updates.background_image_url as string | null;
+      }
+      if (Object.prototype.hasOwnProperty.call(updates, 'background_image_scale')) {
+        changedCustomization.background_image_scale = updates.background_image_scale as string | null;
+      }
+
+      if (Object.keys(changedCustomization).length > 0) {
+        const broadcastChannel = supabase.channel(`board-${boardId}`);
+        await broadcastChannel.send({
+          type: 'broadcast',
+          event: 'board_customization_changed',
+          payload: {
+            boardId,
+            ...changedCustomization,
+            updatedAt: new Date().toISOString(),
+          },
+        });
       }
       
       toast({
