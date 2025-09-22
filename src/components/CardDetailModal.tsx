@@ -45,11 +45,21 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const mdEditorRef = useRef<any>(null);
+  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setTitle(card.title);
     setDescription(card.description || '');
   }, [card]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Focus the MDEditor when entering edit mode
   useEffect(() => {
@@ -94,11 +104,37 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
     setHasUnsavedChanges(newDescription !== card.description);
   };
 
-  const handleDescriptionBlur = () => {
-    if (hasUnsavedChanges) {
-      handleSaveDescription();
+  const handleDescriptionFocus = () => {
+    // Cancel any pending blur timeout when user focuses back on editor
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
     }
-    setIsEditingDescription(false);
+  };
+
+  const handleDescriptionBlur = (e: React.FocusEvent) => {
+    // Clear any existing timeout
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+    }
+    
+    // Check if the focus is moving to another element within the editor
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    const editorContainer = mdEditorRef.current;
+    
+    // If focus is moving to a toolbar button or another element within the editor, don't save/exit
+    if (relatedTarget && editorContainer && editorContainer.contains(relatedTarget)) {
+      return;
+    }
+    
+    // Use a timeout to allow for toolbar button clicks
+    blurTimeoutRef.current = setTimeout(() => {
+      // Only save and exit if focus is truly leaving the editor
+      if (hasUnsavedChanges) {
+        handleSaveDescription();
+      }
+      setIsEditingDescription(false);
+    }, 150); // Small delay to allow toolbar interactions
   };
 
   const handleDeleteCard = async () => {
@@ -138,7 +174,13 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
       // Escape to exit edit mode and save
       if (e.key === 'Escape' && isEditingDescription) {
         e.preventDefault();
-        handleDescriptionBlur();
+        // Create a synthetic blur event
+        const syntheticEvent = {
+          relatedTarget: null,
+          preventDefault: () => {},
+          stopPropagation: () => {}
+        } as React.FocusEvent;
+        handleDescriptionBlur(syntheticEvent);
       }
     };
 
@@ -226,7 +268,8 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
                   <MDEditor
                     value={description}
                     onChange={handleDescriptionChange}
-                    onBlur={handleDescriptionBlur}
+                    onBlur={(e) => handleDescriptionBlur(e as any)}
+                    onFocus={handleDescriptionFocus}
                     data-color-mode="light"
                     height={400}
                     visibleDragbar={false}
