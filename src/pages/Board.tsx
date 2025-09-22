@@ -1155,9 +1155,9 @@ export default function Board() {
 
   return (
     <div className="min-h-screen" style={getBackgroundStyles()}>
-      <header className="border-b bg-card">
+      <header className="sticky top-0 z-10 border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16 space-x-4">
+          <div className="flex items-center h-16 gap-4">
             <Link to="/">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -1176,7 +1176,7 @@ export default function Board() {
                 />
               ) : (
                 <h1 
-                  className="text-xl font-bold cursor-pointer hover:bg-muted/50 px-2 py-1 rounded"
+                  className="text-xl font-semibold cursor-pointer hover:bg-muted/50 px-2 py-1 rounded"
                   onClick={handleInlineBoardTitleEdit}
                 >
                   {board.title}

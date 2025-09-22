@@ -340,15 +340,22 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
+    <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-muted overflow-hidden">
+      <div className="pointer-events-none absolute -top-32 -right-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-purple-500/10 blur-3xl" />
+
+      <header className="sticky top-0 z-10 border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-bold">Kanban Boards</h1>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">
-                Welcome, {user?.email}
+            <h1 className="text-2xl font-semibold tracking-tight">Your Boards</h1>
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline text-sm text-muted-foreground">
+                {user?.email}
               </span>
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Board
+              </Button>
               <Button variant="outline" onClick={handleSignOut} size="sm">
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
@@ -358,7 +365,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Pending Invitations */}
         {invitations.length > 0 && (
           <div className="mb-8">
@@ -368,7 +375,7 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {invitations.map((invitation) => (
-                <Card key={invitation.id} className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                <Card key={invitation.id} className="border-amber-200 bg-amber-50/70 hover:bg-amber-50 dark:border-amber-800 dark:bg-amber-950/70 transition-colors">
                   <CardHeader>
                     <CardTitle className="text-lg">Board Invitation</CardTitle>
                     <CardDescription className="line-clamp-2">
@@ -412,12 +419,10 @@ export default function Dashboard() {
 
         {/* My Boards Section */}
         <div className="mb-8">
-          <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight">My Boards</h2>
-              <p className="text-muted-foreground">
-                Boards you own and manage
-              </p>
+              <h2 className="text-2xl font-semibold tracking-tight">My Boards</h2>
+              <p className="text-muted-foreground">Boards you own and manage</p>
             </div>
             <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -429,9 +434,9 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {myBoards.map((board) => (
             <Link key={board.id} to={`/board/${board.id}`}>
-              <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
+              <Card className="group h-full cursor-pointer border border-border/60 bg-card/70 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-lg">
                 <CardHeader>
-                  <CardTitle className="line-clamp-2">{board.title}</CardTitle>
+                  <CardTitle className="line-clamp-2 group-hover:text-primary transition-colors">{board.title}</CardTitle>
                   {board.description && (
                     <CardDescription className="line-clamp-3">
                       {board.description}
@@ -439,9 +444,7 @@ export default function Dashboard() {
                   )}
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    Updated {new Date(board.updated_at).toLocaleDateString()}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Updated {new Date(board.updated_at).toLocaleDateString()}</p>
                 </CardContent>
               </Card>
             </Link>
@@ -462,19 +465,19 @@ export default function Dashboard() {
         {sharedBoards.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-6">
-              <h2 className="text-3xl font-bold tracking-tight">Shared with Me</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">Shared with Me</h2>
               <Badge variant="secondary">{sharedBoards.length}</Badge>
             </div>
             <p className="text-muted-foreground mb-6">
               Boards that others have shared with you
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {sharedBoards.map((board) => (
                 <Link key={board.id} to={`/board/${board.id}`}>
-                  <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                    <Card className="group h-full cursor-pointer border border-blue-200 bg-blue-50/70 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-800 dark:bg-blue-950/70">
                     <CardHeader>
-                      <CardTitle className="line-clamp-2">{board.title}</CardTitle>
+                      <CardTitle className="line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{board.title}</CardTitle>
                       {board.description && (
                         <CardDescription className="line-clamp-3">
                           {board.description}
@@ -482,9 +485,7 @@ export default function Dashboard() {
                       )}
                     </CardHeader>
                     <CardContent>
-                      <p className="text-xs text-muted-foreground">
-                        Updated {new Date(board.updated_at).toLocaleDateString()}
-                      </p>
+                        <p className="text-xs text-muted-foreground">Updated {new Date(board.updated_at).toLocaleDateString()}</p>
                     </CardContent>
                   </Card>
                 </Link>
