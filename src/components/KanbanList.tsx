@@ -19,6 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface List {
   id: string;
@@ -55,6 +65,7 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
   const [editTitle, setEditTitle] = useState(list.title);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateTitle, setDuplicateTitle] = useState(`${list.title} (Copy)`);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const {
     attributes,
@@ -139,9 +150,7 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
   };
 
   const handleDeleteList = async () => {
-    if (confirm(`Are you sure you want to delete "${list.title}"? This will also delete all cards in this list.`)) {
-      await onDeleteList(list.id);
-    }
+    await onDeleteList(list.id);
   };
 
   const handleDuplicateList = () => {
@@ -214,7 +223,7 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
                   <Copy className="h-4 w-4 mr-2" />
                   Duplicate
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDeleteList} className="text-destructive">
+                <DropdownMenuItem onClick={() => setShowDeleteConfirm(true)} className="text-destructive">
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
                 </DropdownMenuItem>
@@ -338,6 +347,30 @@ export function KanbanList({ list, cards, onCreateCard, onUpdateCard, onDeleteCa
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete List Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete List</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{list.title}"? This will also delete all cards in this list. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                handleDeleteList();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete List
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

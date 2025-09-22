@@ -4,6 +4,16 @@ import {
   DialogContent,
   DialogHeader,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Edit3, Eye, Save, X, Trash2, EyeOff } from 'lucide-react';
@@ -33,6 +43,7 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const mdEditorRef = useRef<any>(null);
 
   useEffect(() => {
@@ -91,10 +102,8 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
   };
 
   const handleDeleteCard = async () => {
-    if (confirm(`Are you sure you want to delete "${card.title}"?`)) {
-      await onDeleteCard(card.id);
-      onOpenChange(false);
-    }
+    await onDeleteCard(card.id);
+    onOpenChange(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -174,7 +183,7 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
             <Button
               size="sm"
               variant="destructive"
-              onClick={handleDeleteCard}
+              onClick={() => setShowDeleteConfirm(true)}
               className="ml-4"
             >
               <Trash2 className="h-4 w-4 mr-1" />
@@ -263,6 +272,30 @@ export function CardDetailModal({ card, open, onOpenChange, onUpdateCard, onDele
           </div>
         </div>
       </DialogContent>
+
+      {/* Delete Card Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Card</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{card.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                handleDeleteCard();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Card
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

@@ -19,6 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -59,6 +69,7 @@ export default function Board() {
   const [isEditingBoardTitle, setIsEditingBoardTitle] = useState(false);
   const [inlineBoardTitle, setInlineBoardTitle] = useState('');
   const [showCustomization, setShowCustomization] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (boardId) {
@@ -386,30 +397,28 @@ export default function Board() {
   const deleteBoard = async () => {
     if (!boardId) return;
 
-    if (confirm(`Are you sure you want to delete "${board?.title}"? This will delete all lists and cards in this board.`)) {
-      try {
-        // Delete the board - lists and cards will be automatically deleted due to CASCADE
-        const { error: boardError } = await supabase
-          .from('boards')
-          .delete()
-          .eq('id', boardId);
+    try {
+      // Delete the board - lists and cards will be automatically deleted due to CASCADE
+      const { error: boardError } = await supabase
+        .from('boards')
+        .delete()
+        .eq('id', boardId);
 
-        if (boardError) throw boardError;
+      if (boardError) throw boardError;
 
-        toast({
-          title: 'Success',
-          description: 'Board deleted successfully!',
-        });
+      toast({
+        title: 'Success',
+        description: 'Board deleted successfully!',
+      });
 
-        // Redirect to dashboard
-        window.location.href = '/';
-      } catch (error: any) {
-        toast({
-          title: 'Error',
-          description: error.message,
-          variant: 'destructive',
-        });
-      }
+      // Redirect to dashboard
+      window.location.href = '/';
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -1115,7 +1124,7 @@ export default function Board() {
                     <Palette className="h-4 w-4 mr-2" />
                     Customize Appearance
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={deleteBoard} className="text-destructive">
+                  <DropdownMenuItem onClick={() => setShowDeleteConfirm(true)} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Board
                   </DropdownMenuItem>
@@ -1206,6 +1215,30 @@ export default function Board() {
         board={board}
         onSave={handleSaveCustomization}
       />
+
+      {/* Delete Board Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Board</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{board?.title}"? This will delete all lists and cards in this board. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                deleteBoard();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Board
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
