@@ -137,7 +137,8 @@ export default function Board() {
         .from('boards')
         .select('*')
         .eq('id', boardId)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (boardError) throw boardError;
       setBoard(boardData);
@@ -184,7 +185,8 @@ export default function Board() {
         .from('boards')
         .select('owner_id')
         .eq('id', boardId)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (boardData?.owner_id === user.id) {
         setUserRole('owner');
@@ -197,7 +199,9 @@ export default function Board() {
         .select('role')
         .eq('board_id', boardId)
         .eq('user_id', user.id)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (membership) {
         setUserRole(membership.role as 'editor' | 'viewer');
@@ -351,7 +355,8 @@ export default function Board() {
               .from('lists')
               .select('board_id')
               .eq('id', newCard.list_id)
-              .single();
+              .limit(1)
+              .maybeSingle();
             isRelevantCard = listData?.board_id === boardId;
             console.log('List data for new card:', listData);
           } else if (oldCard?.list_id) {
@@ -360,7 +365,8 @@ export default function Board() {
               .from('lists')
               .select('board_id')
               .eq('id', oldCard.list_id)
-              .single();
+              .limit(1)
+              .maybeSingle();
             isRelevantCard = listData?.board_id === boardId;
             console.log('List data for old card:', listData);
           }
@@ -416,12 +422,17 @@ export default function Board() {
         .update(updates)
         .eq('id', boardId)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
-      // Update local state immediately (real-time will also update when working)
-      setBoard(data);
+      // If RLS prevents returning the row (e.g., invited user without update/select),
+      // fall back to refetching the board instead of throwing a coercion error
+      if (data) {
+        setBoard(data);
+      } else {
+        await fetchBoardData();
+      }
       
       toast({
         title: 'Success',

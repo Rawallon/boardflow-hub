@@ -43,6 +43,8 @@ const PRESET_COLORS = [
   '#6f42c1', '#e83e8c', '#dc3545', '#fd7e14'
 ];
 
+const UNIQUE_PRESET_COLORS = Array.from(new Set(PRESET_COLORS));
+
 export function BoardCustomizationDialog({
   open,
   onOpenChange,
@@ -103,9 +105,9 @@ export function BoardCustomizationDialog({
             <div>
               <Label className="text-sm text-muted-foreground mb-2 block">Preset Colors</Label>
               <div className="grid grid-cols-8 gap-2">
-                {PRESET_COLORS.map((color) => (
+                {UNIQUE_PRESET_COLORS.map((color, index) => (
                   <button
-                    key={color}
+                    key={`${color}-${index}`}
                     type="button"
                     className={`w-8 h-8 rounded border-2 transition-all hover:scale-110 ${
                       backgroundColor === color ? 'border-primary ring-2 ring-primary/20' : 'border-gray-300'

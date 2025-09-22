@@ -48,7 +48,8 @@ export function InvitationHandler() {
           )
         `)
         .eq('token', token)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (error) throw error;
 

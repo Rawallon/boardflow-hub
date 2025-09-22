@@ -58,7 +58,9 @@ export function PublicBoardView() {
         .eq('board_id', boardId)
         .eq('token', token)
         .eq('is_active', true)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (tokenError || !tokenData) {
         throw new Error('Invalid or expired share link');
@@ -74,7 +76,8 @@ export function PublicBoardView() {
         .from('boards')
         .select('*')
         .eq('id', boardId)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (boardError) throw boardError;
       setBoard(boardData);
