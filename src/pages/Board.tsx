@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, Settings, Edit2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Settings, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanBoard } from '@/components/KanbanBoard';
@@ -59,12 +59,19 @@ export default function Board() {
     if (boardId) {
       fetchBoardData();
       setupRealtimeSubscriptions();
+      
+      // Set up a periodic refresh as a fallback for real-time issues
+      const refreshInterval = setInterval(() => {
+        console.log('🔄 Periodic refresh of board data');
+        fetchBoardData();
+      }, 30000); // Refresh every 30 seconds
+      
+      return () => {
+        clearInterval(refreshInterval);
+        // Cleanup subscriptions when component unmounts
+        supabase.removeAllChannels();
+      };
     }
-
-    return () => {
-      // Cleanup subscriptions when component unmounts
-      supabase.removeAllChannels();
-    };
   }, [boardId]);
 
   // Test real-time connection and authentication (simplified)
@@ -149,8 +156,26 @@ export default function Board() {
     if (!boardId) return;
 
     console.log('Setting up real-time subscriptions for board:', boardId);
+    
+    // Test real-time connection with a simple broadcast
+    const testChannel = supabase
+      .channel('test-realtime')
+      .on('broadcast', { event: 'test' }, (payload) => {
+        console.log('🧪 Test real-time event received:', payload);
+      })
+      .subscribe((status) => {
+        console.log('🧪 Test channel status:', status);
+        if (status === 'SUBSCRIBED') {
+          // Send a test broadcast
+          testChannel.send({
+            type: 'broadcast',
+            event: 'test',
+            payload: { message: 'Real-time is working!' }
+          });
+        }
+      });
 
-    // Subscribe to board changes
+    // Subscribe to board changes and broadcast events
     const boardChannel = supabase
       .channel(`board-${boardId}`)
       .on(
@@ -171,6 +196,23 @@ export default function Board() {
           }
         }
       )
+      .on('broadcast', { event: 'list_deleted' }, (payload) => {
+        console.log('📡 List deletion broadcast received:', payload);
+        const { listId } = payload.payload;
+        if (listId) {
+          setLists(prev => prev.filter(list => list.id !== listId));
+          setCards(prev => prev.filter(card => card.list_id !== listId));
+          console.log('✅ List removed from UI via broadcast:', listId);
+        }
+      })
+      .on('broadcast', { event: 'card_deleted' }, (payload) => {
+        console.log('📡 Card deletion broadcast received:', payload);
+        const { cardId } = payload.payload;
+        if (cardId) {
+          setCards(prev => prev.filter(card => card.id !== cardId));
+          console.log('✅ Card removed from UI via broadcast:', cardId);
+        }
+      })
       .subscribe((status) => {
         console.log('Board channel status:', status);
       });
@@ -204,13 +246,23 @@ export default function Board() {
               list.id === payload.new.id ? payload.new as List : list
             ).sort((a, b) => a.position - b.position));
           } else if (payload.eventType === 'DELETE') {
+            console.log('List deleted via real-time:', payload.old);
             setLists(prev => prev.filter(list => list.id !== payload.old.id));
             setCards(prev => prev.filter(card => card.list_id !== payload.old.id));
           }
         }
       )
       .subscribe((status) => {
-        console.log('Lists channel status:', status);
+        console.log('📡 Lists channel status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Lists real-time subscription is active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Lists channel error');
+        } else if (status === 'TIMED_OUT') {
+          console.error('❌ Lists channel timed out');
+        } else if (status === 'CLOSED') {
+          console.error('❌ Lists channel closed');
+        }
       });
 
     // Subscribe to card changes for lists in this board
@@ -279,7 +331,7 @@ export default function Board() {
               card.id === newCard.id ? newCard : card
             ).sort((a, b) => a.position - b.position));
           } else if (payload.eventType === 'DELETE' && oldCard) {
-            console.log('Deleting card:', oldCard);
+            console.log('Card deleted via real-time:', oldCard);
             setCards(prev => prev.filter(card => card.id !== oldCard.id));
           }
         }
@@ -290,6 +342,7 @@ export default function Board() {
 
     return () => {
       console.log('Cleaning up real-time subscriptions');
+      testChannel.unsubscribe();
       boardChannel.unsubscribe();
       listsChannel.unsubscribe();
       cardsChannel.unsubscribe();
@@ -330,23 +383,7 @@ export default function Board() {
 
     if (confirm(`Are you sure you want to delete "${board?.title}"? This will delete all lists and cards in this board.`)) {
       try {
-        // First delete all cards
-        const { error: cardsError } = await supabase
-          .from('cards')
-          .delete()
-          .in('list_id', lists.map(list => list.id));
-
-        if (cardsError) throw cardsError;
-
-        // Then delete all lists
-        const { error: listsError } = await supabase
-          .from('lists')
-          .delete()
-          .eq('board_id', boardId);
-
-        if (listsError) throw listsError;
-
-        // Finally delete the board
+        // Delete the board - lists and cards will be automatically deleted due to CASCADE
         const { error: boardError } = await supabase
           .from('boards')
           .delete()
@@ -503,31 +540,54 @@ export default function Board() {
 
   const deleteList = async (listId: string) => {
     try {
-      // First delete all cards in the list
-      const { error: cardsError } = await supabase
-        .from('cards')
-        .delete()
-        .eq('list_id', listId);
-
-      if (cardsError) throw cardsError;
-
-      // Then delete the list
+      console.log('🗑️ Deleting list:', listId);
+      
+      // Store the list data before deletion for optimistic update
+      const listToDelete = lists.find(list => list.id === listId);
+      const cardsToDelete = cards.filter(card => card.list_id === listId);
+      
+      // Perform optimistic update immediately
+      setLists(prev => prev.filter(list => list.id !== listId));
+      setCards(prev => prev.filter(card => card.list_id !== listId));
+      
+      // Delete the list - cards will be automatically deleted due to CASCADE
       const { error: listError } = await supabase
         .from('lists')
         .delete()
         .eq('id', listId);
 
-      if (listError) throw listError;
+      if (listError) {
+        console.error('❌ List deletion error:', listError);
+        
+        // Revert optimistic update on error
+        setLists(prev => [...prev, listToDelete!].sort((a, b) => a.position - b.position));
+        setCards(prev => [...prev, ...cardsToDelete].sort((a, b) => a.position - b.position));
+        
+        throw listError;
+      }
 
-      // Update local state immediately (real-time will also update when working)
-      setLists(prev => prev.filter(list => list.id !== listId));
-      setCards(prev => prev.filter(card => card.list_id !== listId));
+      console.log('✅ List deleted successfully from database');
+      
+      // Send broadcast event to notify other clients about the deletion
+      // This works around the RLS limitation with DELETE events
+      const broadcastChannel = supabase.channel(`board-${boardId}`);
+      await broadcastChannel.send({
+        type: 'broadcast',
+        event: 'list_deleted',
+        payload: {
+          listId: listId,
+          boardId: boardId,
+          deletedAt: new Date().toISOString()
+        }
+      });
+      console.log('📡 Broadcast sent for list deletion:', listId);
       
       toast({
         title: 'Success',
         description: 'List deleted successfully!',
       });
     } catch (error: any) {
+      console.error('❌ Error in deleteList:', error);
       toast({
         title: 'Error',
         description: error.message,
@@ -591,21 +651,51 @@ export default function Board() {
 
   const deleteCard = async (cardId: string) => {
     try {
+      console.log('🗑️ Deleting card:', cardId);
+      
+      // Store the card data before deletion for optimistic update
+      const cardToDelete = cards.find(card => card.id === cardId);
+      
+      // Perform optimistic update immediately
+      setCards(prev => prev.filter(card => card.id !== cardId));
+      
       const { error } = await supabase
         .from('cards')
         .delete()
         .eq('id', cardId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Card deletion error:', error);
+        
+        // Revert optimistic update on error
+        if (cardToDelete) {
+          setCards(prev => [...prev, cardToDelete].sort((a, b) => a.position - b.position));
+        }
+        
+        throw error;
+      }
 
-      // Update local state immediately (real-time will also update when working)
-      setCards(prev => prev.filter(card => card.id !== cardId));
+      console.log('✅ Card deleted successfully from database');
+      
+      // Send broadcast event to notify other clients about the deletion
+      const broadcastChannel = supabase.channel(`board-${boardId}`);
+      await broadcastChannel.send({
+        type: 'broadcast',
+        event: 'card_deleted',
+        payload: {
+          cardId: cardId,
+          boardId: boardId,
+          deletedAt: new Date().toISOString()
+        }
+      });
+      console.log('📡 Broadcast sent for card deletion:', cardId);
       
       toast({
         title: 'Success',
         description: 'Card deleted successfully!',
       });
     } catch (error: any) {
+      console.error('❌ Error in deleteCard:', error);
       toast({
         title: 'Error',
         description: error.message,
@@ -938,6 +1028,18 @@ export default function Board() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  console.log('🔄 Manual refresh triggered');
+                  fetchBoardData();
+                }}
+                title="Refresh board data"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm">
